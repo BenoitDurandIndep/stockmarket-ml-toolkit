@@ -133,3 +133,6 @@ dmypy.json
 
 # Useless
 todo.txt
+
+# Logging
+/logs
