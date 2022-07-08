@@ -2,7 +2,6 @@ from pprint import pprint
 from alpha_vantage.timeseries import TimeSeries
 from decouple import AutoConfig
 from pandas import DataFrame as df
-import pandas
 
 config = AutoConfig(search_path=".env")
 ALPHAVANTAGE_KEY = config("ALPHAVANTAGE_KEY", cast=str)
@@ -24,11 +23,43 @@ class GetDataAlphaVantage:
 
     """
 
+    _REGION_LIST = ["United States", "United Kingdon", "Paris", "Frankfurt"]
+    _TYPE_LIST = ["Equity", "ETF"]
+    _CURR_LIST = ["EUR", "USD"]
+
     def __init__(self) -> None:
         """
         Constructs the timeseries
         """
         self._ts = TimeSeries(key=ALPHAVANTAGE_KEY, output_format="pandas")
+
+    def search_symbol(self, keyword: str, type: str = "Equity", region: str = "Paris") -> tuple[df, str]:
+        """
+        Returns the dataframe with the list of symbol for the keyword and for the filters specified
+
+            Parameters : 
+                keyword(str) : keyword to search for
+                type(str) : type of asset (Equity,ETF)
+                region(bool) : marketplace (United States, United Kingdon, Paris, Frankfurt)
+
+            Returns:
+                a tuple with 
+                    dataframe : the dataframe with the data fitlered
+                    string : the metadata of the request
+        """
+        if type not in self._TYPE_LIST:
+            raise ValueError(f"Type {type} is not known : {self._TYPE_LIST}")
+        elif region not in self._REGION_LIST:
+            raise ValueError(
+                f"Region {region} is not known : {self._REGION_LIST}")
+
+        df_result, metadata = self._ts.get_symbol_search(keywords=keyword)
+        df_result = df(df_result)
+
+        df_filtered = df_result[(df_result["3. type"] == type) & (
+            df_result["4. region"] == region)]
+
+        return df_filtered, metadata
 
     def get_stock(self, symbol: str, interval: str, adjusted: bool = True, compact: bool = True) -> tuple[df, str]:
         """
@@ -78,7 +109,7 @@ class GetDataAlphaVantage:
                 else:
                     df_result, metadata = self._ts.get_monthly(symbol=symbol)
             case _:
-                df_result = pandas.DataFrame()
+                df_result = df()
                 metadata = "INTERVAL NOT FOUND!"
 
         return df_result, metadata
@@ -91,3 +122,5 @@ if __name__ == "__main__":
         symbol="TTE.PAR", interval="1w", adjusted=True)
     pprint(data_tte_1w.head())
     pprint(meta)
+    df_symb,meta=get_data_alpha.search_symbol(keyword="TotalEnergies")
+    pprint(df_symb)
