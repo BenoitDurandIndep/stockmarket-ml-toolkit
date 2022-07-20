@@ -1,10 +1,10 @@
+import os
 from pprint import pprint
 from alpha_vantage.timeseries import TimeSeries
 from decouple import AutoConfig
 from pandas import DataFrame as df
 
-config = AutoConfig(search_path=".env")
-ALPHAVANTAGE_KEY = config("ALPHAVANTAGE_KEY", cast=str)
+
 
 
 class GetDataAlphaVantage:
@@ -26,11 +26,15 @@ class GetDataAlphaVantage:
     _REGION_LIST = ["United States", "United Kingdon", "Paris", "Frankfurt"]
     _TYPE_LIST = ["Equity", "ETF"]
     _CURR_LIST = ["EUR", "USD"]
+    _INTERVAL_LIST=["1min", "5min", "15min", "30min", "1h", "1d", "1w", "1mon"]
 
     def __init__(self) -> None:
         """
         Constructs the timeseries
         """
+        dir_path = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+        config = AutoConfig(search_path=os.path.join(dir_path,".env"))
+        ALPHAVANTAGE_KEY = config("ALPHAVANTAGE_KEY", cast=str)
         self._ts = TimeSeries(key=ALPHAVANTAGE_KEY, output_format="pandas")
 
     def search_symbol(self, keyword: str, type: str = "Equity", region: str = "Paris") -> tuple[df, str]:
@@ -76,18 +80,11 @@ class GetDataAlphaVantage:
                     dataframe : the dataframe with the data
                     string : the metadata of the request
         """
+        if interval not in self._INTERVAL_LIST:
+            raise ValueError(f"Interval {interval} is not known : {self._INTERVAL_LIST}")
 
         match interval:
-            case '1m':
-                df_result, metadata = self._ts.get_intraday_extended(
-                    symbol=symbol, interval=interval, adjusted=adjusted)
-            case '5m':
-                df_result, metadata = self._ts.get_intraday_extended(
-                    symbol=symbol, interval=interval, adjusted=adjusted)
-            case '15m':
-                df_result, metadata = self._ts.get_intraday_extended(
-                    symbol=symbol, interval=interval, adjusted=adjusted)
-            case '30m':
+            case '1m' | '5m' | '15m' | '30m':
                 df_result, metadata = self._ts.get_intraday_extended(
                     symbol=symbol, interval=interval, adjusted=adjusted)
             case '1h':
@@ -109,18 +106,20 @@ class GetDataAlphaVantage:
                 else:
                     df_result, metadata = self._ts.get_monthly(symbol=symbol)
             case _:
-                df_result = df()
-                metadata = "INTERVAL NOT FOUND!"
+                raise ValueError(f"Interval {interval} is not known : {self._INTERVAL_LIST}")
 
         return df_result, metadata
 
 
 if __name__ == "__main__":
     get_data_alpha = GetDataAlphaVantage()
-
-    data_tte_1w, meta = get_data_alpha.get_stock(
-        symbol="TTE.PAR", interval="1w", adjusted=True)
-    pprint(data_tte_1w.head())
-    pprint(meta)
-    df_symb,meta=get_data_alpha.search_symbol(keyword="TotalEnergies")
+    symbol="MRK.PAR"
+    # try:
+    #     data_tte_1w, meta = get_data_alpha.get_stock(
+    #         symbol=symbol, interval="1w", adjusted=True)
+    #     pprint(data_tte_1w.head())
+    # except ValueError:
+    #     print(f"ERROR  requesting for {symbol} ")
+    # pprint(meta)
+    df_symb, meta = get_data_alpha.search_symbol(keyword="dsy")
     pprint(df_symb)
