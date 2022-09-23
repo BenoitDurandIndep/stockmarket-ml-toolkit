@@ -24,7 +24,7 @@ class GetDataAlphaVantage:
     """
 
     _REGION_LIST = ["United States", "United Kingdon", "Paris", "Frankfurt"]
-    _TYPE_LIST = ["Equity", "ETF"]
+    _TYPE_LIST = ["Equity", "ETF","FULL"]
     _CURR_LIST = ["EUR", "USD"]
     _INTERVAL_LIST=["1min", "5min", "15min", "30min", "1h", "1d", "1w", "1mon"]
 
@@ -43,7 +43,7 @@ class GetDataAlphaVantage:
 
             Parameters : 
                 keyword(str) : keyword to search for
-                type(str) : type of asset (Equity,ETF)
+                type(str) : type of asset (Equity,ETF,FULL)
                 region(bool) : marketplace (United States, United Kingdon, Paris, Frankfurt)
 
             Returns:
@@ -60,8 +60,11 @@ class GetDataAlphaVantage:
         df_result, metadata = self._ts.get_symbol_search(keywords=keyword)
         df_result = df(df_result)
 
-        df_filtered = df_result[(df_result["3. type"] == type) & (
-            df_result["4. region"] == region)]
+        if type!="FULL":
+            df_filtered = df_result[(df_result["3. type"] == type) & (
+                df_result["4. region"] == region)]
+        else :
+            df_filtered = df_result
 
         return df_filtered, metadata
 
@@ -86,10 +89,10 @@ class GetDataAlphaVantage:
         match interval:
             case '1m' | '5m' | '15m' | '30m':
                 df_result, metadata = self._ts.get_intraday_extended(
-                    symbol=symbol, interval=interval, adjusted=adjusted)
+                    symbol=symbol, interval=interval)
             case '1h':
                 df_result, metadata = self._ts.get_intraday_extended(
-                    symbol=symbol, interval="60m", adjusted=adjusted)
+                    symbol=symbol, interval="60m")
             case '1d':
                 df_result, metadata = self._ts.get_daily(
                     symbol=symbol, outputsize=compact)
