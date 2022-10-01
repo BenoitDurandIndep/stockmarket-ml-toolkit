@@ -133,7 +133,7 @@ dmypy.json
 
 # Useless
 todo.txt
-sandbox.py
+*sandbox*
 
 # Logging
 /logs

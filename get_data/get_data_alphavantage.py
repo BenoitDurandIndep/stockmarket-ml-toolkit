@@ -117,12 +117,5 @@ class GetDataAlphaVantage:
 if __name__ == "__main__":
     get_data_alpha = GetDataAlphaVantage()
     symbol="MRK.PAR"
-    # try:
-    #     data_tte_1w, meta = get_data_alpha.get_stock(
-    #         symbol=symbol, interval="1w", adjusted=True)
-    #     pprint(data_tte_1w.head())
-    # except ValueError:
-    #     print(f"ERROR  requesting for {symbol} ")
-    # pprint(meta)
     df_symb, meta = get_data_alpha.search_symbol(keyword="dsy")
     pprint(df_symb)
