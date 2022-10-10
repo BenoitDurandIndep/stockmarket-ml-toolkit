@@ -1,2 +1,10 @@
 SELECT sk_symbol,COUNT(*) FROM candle GROUP BY sk_symbol;
---TRUNCATE TABLE candle;
+/*TRUNCATE TABLE candle;*/
+
+SELECT * FROM candle WHERE open_datetime BETWEEN '2020-02-05' AND '2020-03-20' AND sk_symbol=2 ORDER BY open_datetime
+;
+
+SELECT CODE,OPEN_DATETIME, TIMEFRAME,CLOSE FROM SYMBOL sym INNER JOIN CANDLE can ON sym.SK_SYMBOL=can.SK_SYMBOL 
+    WHERE sym.CODE='CW8' AND can.TIMEFRAME=1440;
+    
+  
