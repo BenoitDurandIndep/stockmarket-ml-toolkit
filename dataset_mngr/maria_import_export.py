@@ -127,6 +127,26 @@ def delete_candles_symbol(con: engine.Connection, symbol: str) -> engine.cursor:
     res = con.execute(del_st)
     return res
 
+def get_ind_for_dts(con: engine.Connection, dts_name: str,symbol: str)->pd.DataFrame:
+    """ returns the indicators data in a dataframe for a given dataset and a symbol
+
+    Args:
+        con (engine.Connection): SQLAlchemy connection to the DB 
+        dts_name (str): name of the dataset
+        symbol (str): the code of the symbol
+
+    Returns:
+        pd.DataFrame: a dataframe  with indicators data : NAME LABEL PY_CODE
+    """    
+
+    query = f"""SELECT ind.NAME,ind.LABEL,ind.CODE as PY_CODE FROM dataset dts
+  INNER JOIN ds_content dsc ON dts.SK_DATASET=dsc.SK_DATASET
+  INNER JOIN symbol sym ON dsc.SK_SYMBOL=sym.SK_SYMBOL
+  INNER JOIN indicator ind ON dsc.SK_INDICATOR=ind.SK_INDICATOR
+  WHERE dts.NAME='{dts_name}' AND sym.CODE='{symbol}'
+    """
+    return pd.read_sql_query(query, con)
+
 
 if __name__ == "__main__":
     symbol = "CW8"
