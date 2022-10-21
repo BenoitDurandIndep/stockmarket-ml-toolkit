@@ -143,7 +143,7 @@ def get_ind_for_dts(con: engine.Connection, dts_name: str,symbol: str)->pd.DataF
   INNER JOIN ds_content dsc ON dts.SK_DATASET=dsc.SK_DATASET
   INNER JOIN symbol sym ON dsc.SK_SYMBOL=sym.SK_SYMBOL
   INNER JOIN indicator ind ON dsc.SK_INDICATOR=ind.SK_INDICATOR
-  WHERE dts.NAME='{dts_name}' AND sym.CODE='{symbol}'
+  WHERE dts.NAME='{dts_name}' AND sym.CODE='{symbol}' and ind.CODE is not null
     """
     return pd.read_sql_query(query, con)
 

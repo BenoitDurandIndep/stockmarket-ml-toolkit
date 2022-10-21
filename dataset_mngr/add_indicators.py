@@ -60,7 +60,6 @@ def add_indicators(con: engine.Connection,df_in: pd.DataFrame, dts_name: str) ->
     """    
     df_comp = df_in.copy()
     df_list_ind=get_ind_for_dts(con=con,dts_name=dts_name,symbol=df_comp['CODE'][0])
-
     for row in df_list_ind.itertuples(index=False):
         df_comp[row.LABEL]=get_indicator_value(df_in=df_comp, indic_code=row.PY_CODE)
 
@@ -74,5 +73,5 @@ if __name__ == "__main__":
     dts="DCA_CLOSE_1D_V1"
     df = get_candles_to_df(con=con, symbol=symb, only_close=True)
     #df['SMA20'] = get_indicator_value(df_in=df, indic_code=code)
-    df=add_indicators(con,df,dts)
+    df=add_indicators(con=con,df_in=df,dts_name=dts)
     print(df[50:55])
