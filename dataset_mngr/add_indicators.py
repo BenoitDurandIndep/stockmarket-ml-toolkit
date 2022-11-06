@@ -8,7 +8,7 @@ DEFAULT_INDIC_SEP="$$"
 
 
 def get_indicator_value(df_in: pd.DataFrame, indic_code: str, sep: str = DEFAULT_INDIC_SEP) -> pd.Series:
-    """ calculate and return an indicator serie 
+    """ calculates and returns an indicator serie 
     Column used in the code must be surounded by sep
 
     Example of indic_code : ta.trend.SMAIndicator(close=$$CLOSE$$,window=).sma_indicator()
@@ -53,7 +53,7 @@ def add_indicators(con: engine.Connection,df_in: pd.DataFrame, dts_name: str) ->
     Args:
         con (engine.Connection): SQLAlchemy connection to the DB
         df_in (pd.DataFrame): Dataframe with all price data needed to calculate the indicators
-        dts_name (str): Name o ffthe dataset in the DB
+        dts_name (str): Name of the dataset in the DB
 
     Returns:
         pd.DataFrame: completed dataframe with indicators

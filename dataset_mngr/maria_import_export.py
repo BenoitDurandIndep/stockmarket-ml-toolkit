@@ -26,6 +26,18 @@ def get_connection() -> engine.Connection:
 
     return create_engine(conn_str).connect()
 
+def close_connection(con: engine.Connection) :
+    """Close the connection pool
+
+    Args:
+        con (engine.Connection): QLAlchemy connection to the DB
+    """
+    try:
+        con.close()
+        con.engine.dispose()
+    except:
+        pass
+
 
 def get_symbol_info(con: engine.Connection, symbol: str) -> pd.DataFrame:
     """returns data of the table SYMBOL for the symbol code
@@ -109,6 +121,7 @@ def get_candles_to_df(con: engine.Connection, symbol: str, timeframe: int = 1440
     query = f"""SELECT {objects} FROM SYMBOL sym INNER JOIN CANDLE can ON sym.SK_SYMBOL=can.SK_SYMBOL 
     WHERE sym.CODE='{symbol}' AND can.TIMEFRAME={timeframe} {cond_date}
     """
+    #print(query)
     return pd.read_sql_query(query, con, index_col='OPEN_DATETIME')
 
 
