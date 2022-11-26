@@ -1,7 +1,7 @@
 import pandas as pd
 import ta
 from sqlalchemy import  engine
-from maria_import_export import get_connection, get_candles_to_df, get_ind_for_dts
+from maria_import_export import get_connection, get_candles_to_df, get_ind_for_dts,get_ind_list_by_type_for_dts
 
 KEY_WORDS_LIST = ["CLOSE", "OPEN", "HIGH", "LOW", "IND"]
 DEFAULT_INDIC_SEP="$$"
@@ -65,6 +65,30 @@ def add_indicators(con: engine.Connection,df_in: pd.DataFrame, dts_name: str) ->
 
     return df_comp
 
+def drop_indicators_by_type(con : engine.Connection, df_in:pd.DataFrame,dts_name: str, symbol: str, ind_type: int = 0)->pd.DataFrame:
+    """drop indicators of a dataframe, get indicators list from the DB with the dataset name, symbol and indicator type 
+
+    Args:
+        con (engine.Connection): SQLAlchemy connection to the DB
+        df_in (pd.DataFrame): Dataframe with column to drop
+        dts_name (str): Name of the dataset in the DB
+        symbol (str): Symbol for the Dataset
+        ind_type (int, optional): type of indicator. Defaults to 0.
+
+    Raises:
+        ValueError: if no indicator found in DB for the inputs
+
+    Returns:
+        pd.DataFrame: a copy of the input dataframe without column dropped
+    """
+    list_ind=get_ind_list_by_type_for_dts(con,dts_name,symbol,ind_type)
+    if len(list_ind)>0:
+        df_clean=df_in.copy()
+        df_clean.drop(list_ind['LABEL'].tolist(),axis=1,inplace=True)
+    else:
+        raise ValueError(f"no indicator found for dataset {dts_name}, symbol {symbol} and type {ind_type} ")
+    
+    return df_clean
 
 if __name__ == "__main__":
     code = "ta.trend.SMAIndicator(close=$$CLOSE$$,window=20).sma_indicator()"
@@ -74,4 +98,6 @@ if __name__ == "__main__":
     df = get_candles_to_df(con=con, symbol=symb, only_close=True)
     #df['SMA20'] = get_indicator_value(df_in=df, indic_code=code)
     df=add_indicators(con=con,df_in=df,dts_name=dts)
+    print(df[50:55])
+    df=drop_indicators_by_type(con,df,dts,symb,0)
     print(df[50:55])

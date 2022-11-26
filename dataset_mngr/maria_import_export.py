@@ -26,7 +26,8 @@ def get_connection() -> engine.Connection:
 
     return create_engine(conn_str).connect()
 
-def close_connection(con: engine.Connection) :
+
+def close_connection(con: engine.Connection):
     """Close the connection pool
 
     Args:
@@ -121,7 +122,7 @@ def get_candles_to_df(con: engine.Connection, symbol: str, timeframe: int = 1440
     query = f"""SELECT {objects} FROM SYMBOL sym INNER JOIN CANDLE can ON sym.SK_SYMBOL=can.SK_SYMBOL 
     WHERE sym.CODE='{symbol}' AND can.TIMEFRAME={timeframe} {cond_date}
     """
-    #print(query)
+    # print(query)
     return pd.read_sql_query(query, con, index_col='OPEN_DATETIME')
 
 
@@ -140,7 +141,8 @@ def delete_candles_symbol(con: engine.Connection, symbol: str) -> engine.cursor:
     res = con.execute(del_st)
     return res
 
-def get_ind_for_dts(con: engine.Connection, dts_name: str,symbol: str)->pd.DataFrame:
+
+def get_ind_for_dts(con: engine.Connection, dts_name: str, symbol: str) -> pd.DataFrame:
     """ returns the indicators data in a dataframe for a given dataset and a symbol
 
     Args:
@@ -150,7 +152,7 @@ def get_ind_for_dts(con: engine.Connection, dts_name: str,symbol: str)->pd.DataF
 
     Returns:
         pd.DataFrame: a dataframe  with indicators data : NAME LABEL PY_CODE
-    """    
+    """
 
     query = f"""SELECT ind.NAME,ind.LABEL,ind.CODE as PY_CODE FROM dataset dts
   INNER JOIN ds_content dsc ON dts.SK_DATASET=dsc.SK_DATASET
@@ -158,6 +160,26 @@ def get_ind_for_dts(con: engine.Connection, dts_name: str,symbol: str)->pd.DataF
   INNER JOIN indicator ind ON dsc.SK_INDICATOR=ind.SK_INDICATOR
   WHERE dts.NAME='{dts_name}' AND sym.CODE='{symbol}' and ind.CODE is not null
     """
+    return pd.read_sql_query(query, con)
+
+
+def get_ind_list_by_type_for_dts(con: engine.Connection, dts_name: str, symbol: str, ind_type: int = 0) -> pd.DataFrame:
+    """ returns the list of labels for indicators for a given dataset, a symbol  and an indicator type
+
+    Args:
+        con (engine.Connection): SQLAlchemy connection to the DB 
+        dts_name (str): name of the dataset
+        symbol (str): the code of the symbol
+        ind_type (int) : the type of indicator (0 intermediate 1 feature 2 label)
+
+    Returns:
+        pd.DataFrame: a dataframe  with indicators data :  LABEL 
+    """
+    query = f"""SELECT distinct ind.LABEL FROM dataset dts
+  INNER JOIN ds_content dsc ON dts.SK_DATASET=dsc.SK_DATASET
+  INNER JOIN symbol sym ON dsc.SK_SYMBOL=sym.SK_SYMBOL
+  INNER JOIN indicator ind ON dsc.SK_INDICATOR=ind.SK_INDICATOR
+  WHERE dts.NAME='{dts_name}' AND sym.CODE='{symbol}' and ind.TYPE={ind_type}"""
     return pd.read_sql_query(query, con)
 
 
