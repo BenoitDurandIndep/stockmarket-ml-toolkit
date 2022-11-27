@@ -47,7 +47,7 @@ def add_split_dataset(df_in: pd.DataFrame, split_timeframe: str = "Q", split_pat
     return df_split
 
 
-def split_df_by_split_value(df_in: pd.DataFrame, column_name: str = "split_value", drop_column:bool=True) -> list:
+def split_df_by_split_value(df_in: pd.DataFrame, column_name: str = "split_value", drop_column: bool = True) -> list:
     """ split a df in 3 df (train, validation, confirmation) according a "split column"
     The values must be 0=train , 1=validation, 2=confirmation
 
@@ -57,24 +57,59 @@ def split_df_by_split_value(df_in: pd.DataFrame, column_name: str = "split_value
         drop_column (bool, optional): if it drops the cloumn column_name after split. Defaults to True.
 
     Raises:
-        ValueError: if clumn_name is not found
+        ValueError: if column_name is not found
 
     Returns:
         list: list of 3 dataframes [train, validation, confirmation]
     """
-    df_tmp=df_in.copy()
-    nb_split=(df_tmp[column_name].max())+1
-    df_splitted = ["empty",]*nb_split
+    df_tmp = df_in.copy()
+    nb_split = (df_tmp[column_name].max())+1
+    df_splitted = ["empty", ]*nb_split
 
     if column_name in df_in.columns:
         for i in range(0, nb_split):
             df_splitted[i] = df_in.loc[df_in[column_name] == i].copy(deep=True)
             if drop_column:
-                df_splitted[i].drop(axis=1,columns=[column_name],inplace=True)
+                df_splitted[i].drop(
+                    axis=1, columns=[column_name], inplace=True)
     else:
         raise ValueError(f"column {column_name} not in dataframe !")
 
     return df_splitted
+
+
+def split_df_by_label(df_in: pd.DataFrame, list_label: list, prefix_key: str = "df_", drop_column: bool = True) -> dict:
+    """ split a dataset with n labels int oa dictionary of n dataframes
+    keys are prefixe_key+label
+
+    Args:
+        df_in (pd.DataFrame): the dataset to split
+        df_label_list (list): list of label columns
+        prefix_key (str, optional): prefix for the keys of dict. Defaults to "df_"
+        drop_column (bool, optional): if a dropna is done on the new dataframe. Defaults to True.
+
+    Raises:
+        ValueError: if list of label is empty
+
+    Returns:
+        dict: a dictionnary containing one dataframe per label
+    """
+    print(list_label)
+    dict_ret = dict()
+    if len(list_label) > 0:
+        for lab in list_label:
+            df_tmp = df_in.copy()
+            list_tmp = list_label.copy()
+            list_tmp.remove(lab)
+            df_tmp.drop(list_tmp, axis=1, inplace=True)
+            if drop_column:
+                df_tmp.dropna(inplace=True)
+            dict_ret[prefix_key+lab] = df_tmp
+
+    else:
+        raise ValueError(f"df_label_list is empty !")
+
+    return dict_ret
 
 
 if __name__ == "__main__":
@@ -82,18 +117,25 @@ if __name__ == "__main__":
     nb_val = 10
     ut = "D"
 
-    open, close = rd.sample(range(10, 20), k=nb_val), rd.sample(
-        range(10, 20), k=nb_val)
+    open, close, label1, label2, label3 = rd.choices(range(10, 20), k=nb_val), rd.choices(
+        range(10, 20), k=nb_val), rd.choices(range(0, 2), k=nb_val), rd.choices(range(0, 2), k=nb_val),rd.choices(range(0, 2), k=nb_val)
 
     idx = pd.date_range("2022-01-01", periods=nb_val, freq=ut)
-    frame = {'DATE': idx, 'OPEN': open, 'CLOSE': close}
+    frame = {'DATE': idx, 'OPEN': open, 'CLOSE': close,
+             'LABEL_1': label1, 'LABEL_2': label2,'LABEL_3':label3}
 
     df = pd.DataFrame(frame)
     df.set_index('DATE', inplace=True)
 
+    dict_df = split_df_by_label(df_in=df, list_label=["LABEL_1", "LABEL_2","LABEL_3"])
+
+    print(dict_df)
+    print("**********")
+    df = dict_df["df_LABEL_2"]
+
     df = add_split_dataset(df_in=df, split_timeframe="D", split_pattern=(
         60, 20, 20), clean_na=True, fix_end_val=True)
-    df_train,df_val,df_conf=split_df_by_split_value(df)
+    df_train, df_val, df_conf = split_df_by_split_value(df)
     print(df_train)
     print("**********")
     print(df_val)
