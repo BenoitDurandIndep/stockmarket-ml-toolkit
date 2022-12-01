@@ -1,5 +1,6 @@
 {
     "python.analysis.extraPaths": [
-        "./src/get_data"
+        "./src/get_data",
+        "${workspaceFolder}/dataset_mngr/"
     ]
 }

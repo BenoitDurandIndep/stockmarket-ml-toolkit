@@ -78,7 +78,7 @@ def split_df_by_split_value(df_in: pd.DataFrame, column_name: str = "split_value
     return df_splitted
 
 
-def split_df_by_label(df_in: pd.DataFrame, list_label: list, prefix_key: str = "df_", drop_column: bool = True) -> dict:
+def split_df_by_label(df_in: pd.DataFrame, list_label: list, prefix_key: str = "df_", drop_na: bool = True) -> dict:
     """ split a dataset with n labels int oa dictionary of n dataframes
     keys are prefixe_key+label
 
@@ -86,7 +86,7 @@ def split_df_by_label(df_in: pd.DataFrame, list_label: list, prefix_key: str = "
         df_in (pd.DataFrame): the dataset to split
         df_label_list (list): list of label columns
         prefix_key (str, optional): prefix for the keys of dict. Defaults to "df_"
-        drop_column (bool, optional): if a dropna is done on the new dataframe. Defaults to True.
+        drop_na (bool, optional): if a dropna is done on the new dataframe. Defaults to True.
 
     Raises:
         ValueError: if list of label is empty
@@ -94,7 +94,6 @@ def split_df_by_label(df_in: pd.DataFrame, list_label: list, prefix_key: str = "
     Returns:
         dict: a dictionnary containing one dataframe per label
     """
-    print(list_label)
     dict_ret = dict()
     if len(list_label) > 0:
         for lab in list_label:
@@ -102,7 +101,7 @@ def split_df_by_label(df_in: pd.DataFrame, list_label: list, prefix_key: str = "
             list_tmp = list_label.copy()
             list_tmp.remove(lab)
             df_tmp.drop(list_tmp, axis=1, inplace=True)
-            if drop_column:
+            if drop_na:
                 df_tmp.dropna(inplace=True)
             dict_ret[prefix_key+lab] = df_tmp
 
@@ -112,32 +111,57 @@ def split_df_by_label(df_in: pd.DataFrame, list_label: list, prefix_key: str = "
     return dict_ret
 
 
+def split_df_by_label_strat(df_in: pd.DataFrame, list_label: list, prefix_key: str = "df_", drop_na: bool = True, split_timeframe: str = "Q", split_strat: tuple = (60, 20, 20), fix_end_val: bool = True) -> dict:
+    """ executes split_df_by_label, add_split_dataset and split_df_by_split_value on df_in
+    returns a dict with all splitted dataframes (9 df)
+
+    Args:
+        df_in (pd.DataFrame): the dataset to split
+        list_label (list): list of label columns
+        prefix_key (str, optional): prefix for the keys of dict. Defaults to "df_". Defaults to "df_".
+        drop_na (bool, optional): if a dropna is done on the new dataframe. Defaults to True.
+        split_timeframe (str, optional): timeframe used to split (H, D, M, Q, Y). Defaults to "Q".
+        split_strat (tuple, optional): split %, must be equal to 100. Defaults to (60, 20, 20).
+        fix_end_val (bool, optional): if confirmation must be at the end of dataframe. Defaults to True.
+
+    Raises:
+        ValueError: if list of label is empty
+
+    Returns:
+        dict: a dictionnary containing one dataframe per label per strat part, usually 9 dataframes 
+    """
+    dict_final=dict()
+    if len(list_label) > 0:
+        df_tmp=df_in.copy()
+        dict_df_label=split_df_by_label(df_in=df_tmp,list_label=list_label,prefix_key=prefix_key,drop_na=drop_na)
+        for key,value in dict_df_label.items():
+            df_split=add_split_dataset(df_in=value, split_timeframe=split_timeframe,split_pattern=split_strat,fix_end_val=fix_end_val)
+            df_train,df_val,df_conf=split_df_by_split_value(df_in=df_split)
+            dict_final[key+'_train']=df_train
+            dict_final[key+'_valid']=df_val
+            dict_final[key+'_confirm']=df_conf
+    else:
+        raise ValueError(f"df_label_list is empty !")
+
+    return dict_final
+
+
 if __name__ == "__main__":
     nb_groups = 4
     nb_val = 10
     ut = "D"
 
     open, close, label1, label2, label3 = rd.choices(range(10, 20), k=nb_val), rd.choices(
-        range(10, 20), k=nb_val), rd.choices(range(0, 2), k=nb_val), rd.choices(range(0, 2), k=nb_val),rd.choices(range(0, 2), k=nb_val)
+        range(10, 20), k=nb_val), rd.choices(range(0, 2), k=nb_val), rd.choices(range(0, 2), k=nb_val), rd.choices(range(0, 2), k=nb_val)
 
     idx = pd.date_range("2022-01-01", periods=nb_val, freq=ut)
     frame = {'DATE': idx, 'OPEN': open, 'CLOSE': close,
-             'LABEL_1': label1, 'LABEL_2': label2,'LABEL_3':label3}
+             'LABEL_1': label1, 'LABEL_2': label2, 'LABEL_3': label3}
 
     df = pd.DataFrame(frame)
     df.set_index('DATE', inplace=True)
 
-    dict_df = split_df_by_label(df_in=df, list_label=["LABEL_1", "LABEL_2","LABEL_3"])
-
-    print(dict_df)
+    dict_split=split_df_by_label_strat(df_in=df,list_label=["LABEL_1", "LABEL_2", "LABEL_3"],split_timeframe="D")
+    print(dict_split.keys())
     print("**********")
-    df = dict_df["df_LABEL_2"]
-
-    df = add_split_dataset(df_in=df, split_timeframe="D", split_pattern=(
-        60, 20, 20), clean_na=True, fix_end_val=True)
-    df_train, df_val, df_conf = split_df_by_split_value(df)
-    print(df_train)
-    print("**********")
-    print(df_val)
-    print("**********")
-    print(df_conf)
+    print(list(dict_split.values())[0])
