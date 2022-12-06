@@ -145,6 +145,26 @@ def split_df_by_label_strat(df_in: pd.DataFrame, list_label: list, prefix_key: s
 
     return dict_final
 
+def split_df_x_y(df_in: pd.DataFrame, list_features: list, str_label:str, drop_na: bool = True)->tuple:
+    """ split a dataframe into a features datrafame and the label serie
+
+    Args:
+        df_in (pd.DataFrame): dataframe to split
+        list_features (list): list of column names for features
+        str_label (str): name of the label
+        drop_na (bool, optional): if drop na before split. Defaults to True.
+
+    Returns:
+        tuple: (X dataframe, y serie)
+    """
+
+    df_tmp=df_in.copy()
+    if drop_na:
+        df_tmp.dropna(inplace=True)
+    
+    x_cols=df_tmp[list_features]
+    y_col=df_tmp[str_label]
+    return x_cols,y_col
 
 if __name__ == "__main__":
     nb_groups = 4
@@ -164,4 +184,6 @@ if __name__ == "__main__":
     dict_split=split_df_by_label_strat(df_in=df,list_label=["LABEL_1", "LABEL_2", "LABEL_3"],split_timeframe="D")
     print(dict_split.keys())
     print("**********")
-    print(list(dict_split.values())[0])
+    df_X,df_y=split_df_x_y(df_in=list(dict_split.values())[0],list_features=["OPEN","CLOSE"],str_label="LABEL_1")
+    print(df_X)
+    print(df_y)

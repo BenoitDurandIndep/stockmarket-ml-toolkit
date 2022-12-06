@@ -84,7 +84,8 @@ def drop_indicators_by_type(con : engine.Connection, df_in:pd.DataFrame,dts_name
     list_ind=get_ind_list_by_type_for_dts(con,dts_name,symbol,ind_type)
     if len(list_ind)>0:
         df_clean=df_in.copy()
-        df_clean.drop(list_ind['LABEL'].tolist(),axis=1,inplace=True)
+        for lab in list_ind['LABEL'].tolist():
+            df_clean.drop(lab,axis=1,inplace=True,errors='ignore')
     else:
         raise ValueError(f"no indicator found for dataset {dts_name}, symbol {symbol} and type {ind_type} ")
     
