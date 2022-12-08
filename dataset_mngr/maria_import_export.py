@@ -7,6 +7,21 @@ from sqlalchemy import create_engine, engine, text
 """ List of functions to import/export data from maria db
 """
 
+def get_conf(name:str, file_name:str=".env") -> str:
+    """return the value of a conf stored in file using AutoConfig
+
+    Args:
+        name (str): name of the key
+        file_name (str, optional): name of the file. Defaults to ".env".
+
+    Returns:
+        str: the value as a string
+    """
+    dir_path = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+    config = AutoConfig(search_path=os.path.join(dir_path, file_name))
+
+    return config(name, cast=str)
+
 
 def get_connection() -> engine.Connection:
     """ Create a new Connection instance to the marketdataenrich database
@@ -16,12 +31,11 @@ def get_connection() -> engine.Connection:
     Returns:
         Connection: The connection
     """
-    dir_path = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
-    config = AutoConfig(search_path=os.path.join(dir_path, ".env"))
-    MARIA_SERVER = config("MARIA_SERVER", cast=str)
-    MARIA_DB = config("MARIA_DB", cast=str)
-    MARIA_USER = config("MARIA_USER", cast=str)
-    MARIA_PWD = config("MARIA_PWD", cast=str)
+    MARIA_SERVER = get_conf("MARIA_SERVER")
+    MARIA_DB = get_conf("MARIA_DB")
+    MARIA_USER = get_conf("MARIA_USER")
+    MARIA_PWD = get_conf("MARIA_PWD")
+    
     conn_str = f"mysql+pymysql://{MARIA_USER}:{MARIA_PWD}@{MARIA_SERVER}:3306/{MARIA_DB}"
 
     return create_engine(conn_str).connect()
