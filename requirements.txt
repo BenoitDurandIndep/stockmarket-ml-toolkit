@@ -7,6 +7,7 @@ attrs==22.1.0
 autopep8==1.7.0
 backcall==0.2.0
 backtrader==1.9.76.123
+Boruta==0.3
 certifi==2022.9.14
 charset-normalizer==2.1.1
 colorama==0.4.5
@@ -33,6 +34,7 @@ matplotlib-inline==0.1.6
 multidict==6.0.2
 multitasking==0.0.11
 nest-asyncio==1.5.5
+numexpr==2.8.3
 numpy==1.23.3
 packaging==21.3
 pandas==1.4.4
@@ -54,11 +56,13 @@ pyzmq==24.0.0
 requests==2.28.1
 scikit-learn==1.1.2
 scipy==1.9.1
+seaborn==0.12.2
 six==1.16.0
 sklearn==0.0
 SQLAlchemy==1.4.41
 stack-data==0.5.0
 ta==0.10.2
+tables==3.7.0
 threadpoolctl==3.1.0
 toml==0.10.2
 tornado==6.2
