@@ -39,6 +39,7 @@ numpy==1.23.3
 packaging==21.3
 pandas==1.4.4
 parso==0.8.3
+patsy==0.5.3
 pickleshare==0.7.5
 Pillow==9.2.0
 prompt-toolkit==3.0.31
@@ -61,6 +62,7 @@ six==1.16.0
 sklearn==0.0
 SQLAlchemy==1.4.41
 stack-data==0.5.0
+statsmodels==0.13.5
 ta==0.10.2
 tables==3.7.0
 threadpoolctl==3.1.0
