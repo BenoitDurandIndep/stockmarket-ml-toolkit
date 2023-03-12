@@ -7,7 +7,8 @@ from sqlalchemy import create_engine, engine, text
 """ List of functions to import/export data from maria db
 """
 
-def get_conf(name:str, file_name:str=".env") -> str:
+
+def get_conf(name: str, file_name: str = ".env") -> str:
     """return the value of a conf stored in file using AutoConfig
 
     Args:
@@ -35,7 +36,7 @@ def get_connection() -> engine.Connection:
     MARIA_DB = get_conf("MARIA_DB")
     MARIA_USER = get_conf("MARIA_USER")
     MARIA_PWD = get_conf("MARIA_PWD")
-    
+
     conn_str = f"mysql+pymysql://{MARIA_USER}:{MARIA_PWD}@{MARIA_SERVER}:3306/{MARIA_DB}"
 
     return create_engine(conn_str).connect()
@@ -194,6 +195,23 @@ def get_ind_list_by_type_for_dts(con: engine.Connection, dts_name: str, symbol: 
   INNER JOIN symbol sym ON dsc.SK_SYMBOL=sym.SK_SYMBOL
   INNER JOIN indicator ind ON dsc.SK_INDICATOR=ind.SK_INDICATOR
   WHERE dts.NAME='{dts_name}' AND sym.CODE='{symbol}' and ind.TYPE={ind_type}"""
+    return pd.read_sql_query(query, con)
+
+
+def get_ind_list_for_model(con: engine.Connection, model_name: str) -> pd.DataFrame:
+    """ returns the list of labels for filtered indicators for a given model
+
+    Args:
+        con (engine.Connection): SQLAlchemy connection to the DB 
+        model_name (str): name of the model
+
+    Returns:
+        pd.DataFrame: a dataframe  with indicators data :  LABEL 
+    """
+    query = f"""SELECT distinct ind.LABEL  FROM model md
+    INNER JOIN ds_filtered df ON md.SK_MODEL=df.SK_MODEL
+    INNER JOIN indicator ind ON df.SK_INDICATOR=ind.SK_INDICATOR
+    WHERE md.NAME='{model_name}'"""
     return pd.read_sql_query(query, con)
 
 
