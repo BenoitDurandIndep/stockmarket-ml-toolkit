@@ -1,7 +1,7 @@
 import numpy as np
 from scipy.stats import uniform, randint
 from sklearn.ensemble import RandomForestRegressor
-from sklearn.model_selection import RandomizedSearchCV
+from sklearn.model_selection import RandomizedSearchCV,GridSearchCV
 import xgboost as xgb
 
 
@@ -22,38 +22,45 @@ def report_best_scores(results, n_top:int =3):
             print("")
 
 
-def randomizedsearch_cv_fit_report(estimator, param_distributions, x_train, y_train, random_state:int, n_iter:int=100, cv:int=5, verbose:int=1, n_jobs:int=1,scoring:str="neg_mean_squared_error", n_top:int=3):
+def search_cv_fit_report(estimator, params, x_train, y_train, random_state:int,method:str="grid", n_iter:int=100, cv:int=5, verbose:int=1, n_jobs:int=1,scoring:str="neg_mean_squared_error", n_top:int=3):
     """ Does a RandomizedSearchCV and reports best scores
 
     Args:
         estimator (_type_): estimator object, random forest, xgboost ...
-        param_distributions (dict): Dictionnary with params
+        params (dict): Dictionnary with params
         x_train (pd.DataFrame) : training dataset
         y_train (serie) : label of training dataset
         random_state (int): random state
+        method (str, optional) : optimiszation method grid or random. Defaults to grid.
         n_iter (int, optional): nb of param settings that are sampled. Defaults to 100.
         cv (int, optional): nb folds. Defaults to 5.
         verbose (int, optional): verbosity (0-3). Defaults to 1.
         n_jobs (int, optional): n jobs in parallel. Defaults to 1.
-        scoring (str, optional) : scoring method. Defaults to neg_mean_squared_error.
+        scoring (str, optional) : scoring method. Defaults to neg_mean_squared_error #squared_error.
         n_top (int, optional): nb models showed. Defaults to 3.
 
     Returns:
         estimator : fitted estimator with the best model
     """
-
-    fitted = RandomizedSearchCV(estimator=estimator,
-                                param_distributions=param_distributions,
-                                n_iter=n_iter,
-                                cv=cv,
-                                verbose=verbose,
-                                random_state=random_state,
-                                n_jobs=n_jobs,scoring='neg_mean_squared_error')
+    if method=="random":
+        fitted = RandomizedSearchCV(estimator=estimator,
+                                    param_distributions=params,
+                                    n_iter=n_iter,
+                                    cv=cv,
+                                    verbose=verbose,
+                                    random_state=random_state,
+                                    n_jobs=n_jobs,scoring=scoring)
+    else :
+        fitted = GridSearchCV(estimator=estimator,
+                                    param_grid=params,
+                                    cv=cv,
+                                    verbose=verbose,
+                                    n_jobs=n_jobs,scoring=scoring)
 
     fitted.fit(x_train,y_train)
 
     if(verbose>0):
-        print(f"Accuracy train (neg_mean_squared_error) :{fitted.score(x_train,y_train)}")
+        print(f"Accuracy train ({scoring}) :{fitted.score(x_train,y_train)}")
 
     report_best_scores(fitted.cv_results_, n_top)
 

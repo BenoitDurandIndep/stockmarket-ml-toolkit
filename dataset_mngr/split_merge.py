@@ -106,7 +106,7 @@ def split_df_by_label(df_in: pd.DataFrame, list_label: list, prefix_key: str = "
             dict_ret[prefix_key+lab] = df_tmp
 
     else:
-        raise ValueError(f"df_label_list is empty !")
+        raise ValueError("df_label_list is empty !")
 
     return dict_ret
 
@@ -141,7 +141,7 @@ def split_df_by_label_strat(df_in: pd.DataFrame, list_label: list, prefix_key: s
             dict_final[key+'_valid']=df_val
             dict_final[key+'_confirm']=df_conf
     else:
-        raise ValueError(f"df_label_list is empty !")
+        raise ValueError("df_label_list is empty !")
 
     return dict_final
 
