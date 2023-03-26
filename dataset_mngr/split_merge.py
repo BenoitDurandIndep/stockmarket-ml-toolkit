@@ -79,7 +79,7 @@ def split_df_by_split_value(df_in: pd.DataFrame, column_name: str = "split_value
 
 
 def split_df_by_label(df_in: pd.DataFrame, list_label: list, prefix_key: str = "df_", drop_na: bool = True) -> dict:
-    """ split a dataset with n labels int oa dictionary of n dataframes
+    """ split a dataset with n labels int a dictionary of n dataframes
     keys are prefixe_key+label
 
     Args:
@@ -130,22 +130,25 @@ def split_df_by_label_strat(df_in: pd.DataFrame, list_label: list, prefix_key: s
     Returns:
         dict: a dictionnary containing one dataframe per label per strat part, usually 9 dataframes 
     """
-    dict_final=dict()
+    dict_final = dict()
     if len(list_label) > 0:
-        df_tmp=df_in.copy()
-        dict_df_label=split_df_by_label(df_in=df_tmp,list_label=list_label,prefix_key=prefix_key,drop_na=drop_na)
-        for key,value in dict_df_label.items():
-            df_split=add_split_dataset(df_in=value, split_timeframe=split_timeframe,split_pattern=split_strat,fix_end_val=fix_end_val)
-            df_train,df_val,df_conf=split_df_by_split_value(df_in=df_split)
-            dict_final[key+'_train']=df_train
-            dict_final[key+'_valid']=df_val
-            dict_final[key+'_confirm']=df_conf
+        df_tmp = df_in.copy()
+        dict_df_label = split_df_by_label(
+            df_in=df_tmp, list_label=list_label, prefix_key=prefix_key, drop_na=drop_na)
+        for key, value in dict_df_label.items():
+            df_split = add_split_dataset(
+                df_in=value, split_timeframe=split_timeframe, split_pattern=split_strat, fix_end_val=fix_end_val)
+            df_train, df_val, df_conf = split_df_by_split_value(df_in=df_split)
+            dict_final[key+'_train'] = df_train
+            dict_final[key+'_valid'] = df_val
+            dict_final[key+'_confirm'] = df_conf
     else:
         raise ValueError("df_label_list is empty !")
 
     return dict_final
 
-def split_df_x_y(df_in: pd.DataFrame, list_features: list, str_label:str, drop_na: bool = True)->tuple:
+
+def split_df_x_y(df_in: pd.DataFrame, list_features: list, str_label: str, drop_na: bool = True) -> tuple:
     """ split a dataframe into a features datrafame and the label serie
 
     Args:
@@ -158,13 +161,39 @@ def split_df_x_y(df_in: pd.DataFrame, list_features: list, str_label:str, drop_n
         tuple: (X dataframe, y serie)
     """
 
-    df_tmp=df_in.copy()
+    df_tmp = df_in.copy()
     if drop_na:
         df_tmp.dropna(inplace=True)
-    
-    x_cols=df_tmp[list_features]
-    y_col=df_tmp[str_label]
-    return x_cols,y_col
+
+    x_cols = df_tmp[list_features]
+    y_col = df_tmp[str_label]
+    return x_cols, y_col
+
+
+def range_undersampler(df_in: pd.DataFrame, str_label: str, min_val: float, max_val: float, clean_rate: float) -> pd.DataFrame:
+    """ randomly drop some lines of a dataframe if the value of the specified column is between min_val and max_val
+
+    Args:
+        df_in (pd.DataFrame): dataframe to under sample
+        str_label (str): column with the value to check
+        min_val (float): min value of the range
+        max_val (float): max value of the range
+        clean_rate (float): % of drop 1.0 for 100%
+
+    Returns:
+        pd.DataFrame: the undersampled dataframe 
+    """
+    mask = (df_in[str_label] >= min_val) & (df_in[str_label] <= max_val)
+
+    # Proba for cleaning a line
+    prob_clean = np.random.random(size=len(df_in))
+    prob_masked = prob_clean <= clean_rate
+    rows_to_remove = prob_masked & mask
+
+    df_cleaned = df_in[~rows_to_remove]
+
+    return df_cleaned
+
 
 if __name__ == "__main__":
     nb_groups = 4
@@ -181,9 +210,11 @@ if __name__ == "__main__":
     df = pd.DataFrame(frame)
     df.set_index('DATE', inplace=True)
 
-    dict_split=split_df_by_label_strat(df_in=df,list_label=["LABEL_1", "LABEL_2", "LABEL_3"],split_timeframe="D")
+    dict_split = split_df_by_label_strat(
+        df_in=df, list_label=["LABEL_1", "LABEL_2", "LABEL_3"], split_timeframe="D")
     print(dict_split.keys())
     print("**********")
-    df_X,df_y=split_df_x_y(df_in=list(dict_split.values())[0],list_features=["OPEN","CLOSE"],str_label="LABEL_1")
+    df_X, df_y = split_df_x_y(df_in=list(dict_split.values())[0], list_features=[
+                              "OPEN", "CLOSE"], str_label="LABEL_1")
     print(df_X)
     print(df_y)
