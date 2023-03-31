@@ -135,7 +135,6 @@ if __name__ == "__main__":
     label="lab_perf_21d"
     algo="RANDOM_FOREST_REG"
     df = get_candles_to_df(con=con, symbol=symb, only_close=True)
-    #df['SMA20'] = get_indicator_value(df_in=df, indic_code=code)
     df = add_indicators_to_df(con=con, df_in=df, dts_name=dts)
     print(df[50:55])
     df = drop_indicators_by_type(con, df, dts, symb, 0)

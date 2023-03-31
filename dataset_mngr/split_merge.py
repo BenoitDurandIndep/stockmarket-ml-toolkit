@@ -195,6 +195,48 @@ def range_undersampler(df_in: pd.DataFrame, str_label: str, min_val: float, max_
     return df_cleaned
 
 
+def clipping_col(df_in: pd.DataFrame, str_col: str, min_val: float, max_val: float) -> pd.DataFrame:
+    """ Clip extreme values of a column
+
+    Args:
+        df_in (pd.DataFrame): dataframe to clip
+        str_col (str): column with the value to check
+        min_val (float): min value of the range
+        max_val (float): max value of the range
+
+    Returns:
+        pd.DataFrame: the clipped dataframe
+    """
+    df_out = df_in.copy()
+
+    df_out.loc[df_out[str_col] < min_val, str_col] = min_val
+    df_out.loc[df_out[str_col] > max_val, str_col] = max_val
+
+    return df_out
+
+
+def add_class(df_in: pd.DataFrame, str_label: str, nb_class: int = 10) -> pd.DataFrame:
+    """add a column str_label+"_class" with an integer to split equally the label
+
+    Args:
+        df_in (pd.DataFrame): dataframe to use
+        str_label (str): column with the alabel to split
+        nb_class (int): number of classes needed
+
+    Returns:
+        pd.DataFrame: the dataframe with the str_label+"_class" column
+    """
+    df_out = df_in.copy()
+
+    label_range = df_out[str_label].max() - df_out[str_label].min()
+    class_size = label_range / nb_class
+
+    df_out[str_label + "_class"] = ((df_out[str_label] -
+                                    df_out[str_label].min()) // class_size).astype(int)
+
+    return df_out
+
+
 if __name__ == "__main__":
     nb_groups = 4
     nb_val = 10
