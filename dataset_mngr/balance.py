@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 import random as rd
+import pickle
 from sklearn.preprocessing import PowerTransformer
 from imblearn.under_sampling import RandomUnderSampler, TomekLinks, NearMiss
 from typing import Union
@@ -178,8 +179,30 @@ def yeo_johnson_transform_inverse_col(df_in: pd.DataFrame, str_col: str, pt: Pow
     df_out = df_in.copy()
     df_out[str_col] = pt.inverse_transform(
         df_out[str_col].values.reshape(-1, 1)).flatten()
-    return df_out, pt
+    return df_out
 
+def save_transformer(transformer:PowerTransformer, filename:str):
+    """Save a PowerTransformer
+
+    Args:
+        transformer (PowerTransformer): transformer to save
+        filename (str): path and name of the file
+    """
+    with open(filename, 'wb') as f:
+        pickle.dump(transformer, f)
+
+def load_transformer(filename:str)->PowerTransformer:
+    """Load a PowerTransformer
+
+    Args:
+        filename (str): path and name of the file
+
+    Returns:
+        PowerTransformer: The PowerTransformer
+    """
+    with open(filename, 'rb') as f:
+        transformer = pickle.load(f)
+    return transformer    
 
 if __name__ == "__main__":
     nb_groups = 20
