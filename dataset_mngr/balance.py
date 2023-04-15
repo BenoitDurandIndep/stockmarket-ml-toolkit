@@ -4,10 +4,9 @@ import random as rd
 import pickle
 from sklearn.preprocessing import PowerTransformer
 from imblearn.under_sampling import RandomUnderSampler, TomekLinks, NearMiss
-from typing import Union
 
 
-def log_transform_label(df_in: pd.DataFrame, str_label: str, fl_fix: float = 1e-6) -> Union[pd.DataFrame, float]:
+def log_transform_label(df_in: pd.DataFrame, str_label: str, fl_fix: float = 1e-6) -> pd.DataFrame | float:
     """logarithm transform the column str_label
 
     Args:
@@ -148,7 +147,7 @@ def reg_undersampler_by_class(df_in: pd.DataFrame, str_label: str, str_method: s
     return df_resampled
 
 
-def yeo_johnson_transform_col(df_in: pd.DataFrame, str_col: str) -> Union[pd.DataFrame, PowerTransformer]:
+def yeo_johnson_transform_col(df_in: pd.DataFrame, str_col: str) -> pd.DataFrame | PowerTransformer:
     """Transform a column of a dataframe with Yeo-Johnson
 
     Args:
@@ -181,7 +180,8 @@ def yeo_johnson_transform_inverse_col(df_in: pd.DataFrame, str_col: str, pt: Pow
         df_out[str_col].values.reshape(-1, 1)).flatten()
     return df_out
 
-def save_transformer(transformer:PowerTransformer, filename:str):
+
+def save_transformer(transformer: PowerTransformer, filename: str):
     """Save a PowerTransformer
 
     Args:
@@ -191,7 +191,8 @@ def save_transformer(transformer:PowerTransformer, filename:str):
     with open(filename, 'wb') as f:
         pickle.dump(transformer, f)
 
-def load_transformer(filename:str)->PowerTransformer:
+
+def load_transformer(filename: str) -> PowerTransformer:
     """Load a PowerTransformer
 
     Args:
@@ -202,7 +203,8 @@ def load_transformer(filename:str)->PowerTransformer:
     """
     with open(filename, 'rb') as f:
         transformer = pickle.load(f)
-    return transformer    
+    return transformer
+
 
 if __name__ == "__main__":
     nb_groups = 20

@@ -170,6 +170,43 @@ def split_df_x_y(df_in: pd.DataFrame, list_features: list, str_label: str, drop_
     return x_cols, y_col
 
 
+def join_dataframes_backtest(df_candle: pd.DataFrame, df_score: pd.DataFrame, str_col_score: str, str_col_sl: str = None, str_col_tp: str = None, int_vol_def: int = 100000, fl_sl_def: float = None, fl_tp_def: float = None) -> pd.DataFrame:
+    """Join a dataframe with candles data and a dataframe with score pridction to return a dataframe ready for the backtrader part
+
+    Args:
+        df_candle (pd.DataFrame): dataframe with candles data
+        df_score (pd.DataFrame): dataframe with predictions
+        str_col_score (str): column name of the score prediction
+        str_col_sl (str, optional): column name of the SL. Defaults to None.
+        str_col_tp (str, optional): column name of the TP. Defaults to None.
+        int_vol_def (int, optional): default volume . Defaults to 100000.
+        fl_sl_def (float, optional): default SL. Defaults to None.
+        fl_tp_def (float, optional): default TP. Defaults to None.
+
+    Returns:
+        pd.DataFrame: a dataframe formatted for the backtrader backtest
+    """
+    df_candle_sel=df_candle.copy()
+    df_candle_sel = df_candle_sel.loc[:,['OPEN', 'HIGH', 'LOW', 'CLOSE', 'VOLUME']]
+    df_candle_sel.loc[:, 'VOLUME'] = np.where(df_candle_sel['VOLUME'].isnull() | (
+        df_candle_sel['VOLUME'] == 0), int_vol_def, df_candle_sel['VOLUME'])
+
+    df_score_sel = df_score.copy()
+    df_score_sel = df_score_sel.loc[:,[str_col_score]]
+    df_score_sel['SL'] = fl_sl_def
+    if str_col_sl != None:
+        df_score_sel['SL']=df_score[str_col_sl]
+    df_score_sel['TP'] = fl_tp_def
+    if str_col_tp != None :
+        df_score_sel['TP']=df_score[str_col_tp] 
+
+    df_joined = df_candle_sel.join(df_score_sel, how='inner')
+    df_joined.rename(columns={ 'OPEN':'open', 'HIGH':'high', 'LOW':'low', 'CLOSE':'close', 'VOLUME':'volume'}, inplace=True)
+    df_joined.rename(columns={ str_col_sl: 'SL', str_col_tp: 'TP', str_col_score: 'Predict'}, inplace=True)
+
+    return df_joined
+
+
 if __name__ == "__main__":
     nb_groups = 4
     nb_val = 10
