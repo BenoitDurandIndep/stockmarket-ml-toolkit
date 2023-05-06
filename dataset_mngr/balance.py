@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 import random as rd
+from typing import Dict
 import pickle
 from sklearn.preprocessing import PowerTransformer
 from imblearn.under_sampling import RandomUnderSampler, TomekLinks, NearMiss
@@ -108,7 +109,74 @@ def add_class(df_in: pd.DataFrame, str_label: str, nb_class: int = 10, str_suffi
     return df_out
 
 
-def reg_undersampler_by_class(df_in: pd.DataFrame, str_label: str, str_method: str = "RandomUnderSampler", nb_class: int = 10, strat: str = "auto") -> pd.DataFrame:
+def add_lab_by_class(df_in: pd.DataFrame, str_label: str, categ: Dict[int, list], bool_replace_label: bool = False, str_suffix_class: str = "_class") -> pd.DataFrame:
+    """add/replace a label for categorization based on the value of a continous label
+
+    Args:
+        df_in (pd.DataFrame): dataframe to use
+        str_label (str): column with the existing label
+        categ (Dict[int, list]): limits for the categories eg {0:[5,10],1:[0,5]}
+        bool_replace_label (bool, optional): True, replace the existing label by the new one. False add a new column with the new label. Defaults to True.
+        str_suffix_class (str, optional): Suffix for the new label. Defaults to "_class".
+
+    Returns:
+        pd.DataFrame: the new dataframe
+    """
+    df_out = df_in.copy()
+
+    new_lab=str_label + str_suffix_class
+    #df_out[new_lab] = None
+
+    for key, value in categ.items():
+        class_min = value[0]
+        class_max = value[1]
+        df_out.loc[(df_out[str_label] >= class_min) & (
+            df_out[str_label] <= class_max), new_lab] = key
+
+    if bool_replace_label:
+        df_out = df_out.drop(str_label, axis=1)
+        df_out = df_out.rename(columns={new_lab: str_label})
+
+    return df_out
+
+
+def class_undersampler(df_in: pd.DataFrame, str_label: str, str_method: str = "RandomUnderSampler", str_strat: str = "auto", dict_strat: dict = None) -> pd.DataFrame:
+    """Undersample a dataframe
+
+    Args:
+        df_in (pd.DataFrame): dataframe to undersample
+        str_label (str): column with the classification label
+        str_method (str, optional): the method used to undersample (NearMiss,TomekLinks). Defaults to "RandomUnderSampler".
+        strat (str,optional) : sampling strategy for the method. Defaults to "auto"
+        dict_strat(dict,optional) : if filled, When dict, the keys correspond to the targeted classes. The values correspond to the desired number of samples for each targeted class. to Defaults to None
+
+    Returns:
+        pd.DataFrame: the dataframe undersampled
+    """
+    df_out = df_in.copy()
+
+    X = df_out.drop(str_label, axis=1,inplace=False)
+    y = df_out[str_label]
+
+    strat = dict_strat if dict_strat is not None else str_strat
+
+    if str_method == "NearMiss":
+        method = NearMiss(sampling_strategy=strat)
+    elif str_method == "TomekLinks":
+        method = TomekLinks(sampling_strategy=strat)
+    else:
+        method = RandomUnderSampler(sampling_strategy=strat)
+
+    x_samp, y_samp = method.fit_resample(X, y)
+    # get index from previous df
+    x_samp.index = X.index[method.sample_indices_]
+
+    df_resampled = x_samp.join(df_out.loc[:, [str_label]], how='inner')
+
+    return df_resampled
+
+
+def reg_undersampler_by_class(df_in: pd.DataFrame, str_label: str, str_method: str = "RandomUnderSampler", nb_class: int = 10, str_strat: str = "auto") -> pd.DataFrame:
     """Add a classification label to a dataframe and then undersample on the dataframe
 
     Args:
@@ -133,16 +201,16 @@ def reg_undersampler_by_class(df_in: pd.DataFrame, str_label: str, str_method: s
     y = df_class[lab_class]
 
     if str_method == "NearMiss":
-        method = NearMiss(sampling_strategy=strat)
+        method = NearMiss(sampling_strategy=str_strat)
     elif str_method == "TomekLinks":
-        method = TomekLinks(sampling_strategy=strat)
+        method = TomekLinks(sampling_strategy=str_strat)
     else:
-        method = RandomUnderSampler(sampling_strategy=strat)
-    X_samp, y_samp = method.fit_resample(X, y)
+        method = RandomUnderSampler(sampling_strategy=str_strat)
+    x_samp, y_samp = method.fit_resample(X, y)
     # get index from previous df
-    X_samp.index = X.index[method.sample_indices_]
+    x_samp.index = X.index[method.sample_indices_]
 
-    df_resampled = X_samp.join(df_out.loc[:, [str_label]], how='inner')
+    df_resampled = x_samp.join(df_out.loc[:, [str_label]], how='inner')
 
     return df_resampled
 
