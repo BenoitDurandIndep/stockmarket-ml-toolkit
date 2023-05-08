@@ -5,7 +5,7 @@ from typing import Dict
 import pickle
 from sklearn.preprocessing import PowerTransformer
 from imblearn.under_sampling import RandomUnderSampler, TomekLinks, NearMiss
-
+from imblearn.over_sampling import RandomOverSampler, SMOTE
 
 def log_transform_label(df_in: pd.DataFrame, str_label: str, fl_fix: float = 1e-6) -> pd.DataFrame | float:
     """logarithm transform the column str_label
@@ -138,6 +138,39 @@ def add_lab_by_class(df_in: pd.DataFrame, str_label: str, categ: Dict[int, list]
         df_out = df_out.rename(columns={new_lab: str_label})
 
     return df_out
+
+def class_oversampler(df_in: pd.DataFrame, str_label: str, str_method: str = "RandomOverSampler", str_strat: str = "auto", dict_strat: dict = None) -> pd.DataFrame:
+    """Oversample a dataframe
+
+    Args:
+        df_in (pd.DataFrame): dataframe to undersample
+        str_label (str): column with the classification label
+        str_method (str, optional): the method used to oversample (SMOTE). Defaults to "RandomUnderSampler".
+        strat (str,optional) : sampling strategy for the method. Defaults to "auto"
+        dict_strat(dict,optional) : if filled, When dict, the keys correspond to the targeted classes. The values correspond to the desired number of samples for each targeted class. to Defaults to None
+
+    Returns:
+        pd.DataFrame: the dataframe undersampled
+    """
+    df_out = df_in.copy()
+
+    X = df_out.drop(str_label, axis=1,inplace=False)
+    y = df_out[str_label]
+
+    strat = dict_strat if dict_strat is not None else str_strat
+
+    if str_method == "SMOTE":
+        method = SMOTE(sampling_strategy=strat)
+    else:
+        method = RandomOverSampler(sampling_strategy=strat)
+
+    x_samp, y_samp = method.fit_resample(X, y)
+    # get index from previous df
+    x_samp.index = X.index[method.sample_indices_]
+
+    df_resampled = x_samp.join(df_out.loc[:, [str_label]], how='inner')
+
+    return df_resampled
 
 
 def class_undersampler(df_in: pd.DataFrame, str_label: str, str_method: str = "RandomUnderSampler", str_strat: str = "auto", dict_strat: dict = None) -> pd.DataFrame:
