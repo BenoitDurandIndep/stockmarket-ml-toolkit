@@ -150,7 +150,7 @@ def class_oversampler(df_in: pd.DataFrame, str_label: str, str_method: str = "Ra
         dict_strat(dict,optional) : if filled, When dict, the keys correspond to the targeted classes. The values correspond to the desired number of samples for each targeted class. to Defaults to None
 
     Returns:
-        pd.DataFrame: the dataframe undersampled
+        pd.DataFrame: the dataframe oversampled
     """
     df_out = df_in.copy()
 
@@ -165,10 +165,9 @@ def class_oversampler(df_in: pd.DataFrame, str_label: str, str_method: str = "Ra
         method = RandomOverSampler(sampling_strategy=strat)
 
     x_samp, y_samp = method.fit_resample(X, y)
-    # get index from previous df
-    x_samp.index = X.index[method.sample_indices_]
 
-    df_resampled = x_samp.join(df_out.loc[:, [str_label]], how='inner')
+    df_resampled = pd.DataFrame(y_samp, columns=[str_label])
+    df_resampled = pd.concat([x_samp, df_resampled], axis=1)
 
     return df_resampled
 
