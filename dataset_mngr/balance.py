@@ -3,9 +3,10 @@ import pandas as pd
 import random as rd
 from typing import Dict
 import pickle
-from sklearn.preprocessing import PowerTransformer
+from sklearn.preprocessing import PowerTransformer, StandardScaler
 from imblearn.under_sampling import RandomUnderSampler, TomekLinks, NearMiss
 from imblearn.over_sampling import RandomOverSampler, SMOTE
+
 
 def log_transform_label(df_in: pd.DataFrame, str_label: str, fl_fix: float = 1e-6) -> pd.DataFrame | float:
     """logarithm transform the column str_label
@@ -124,8 +125,7 @@ def add_lab_by_class(df_in: pd.DataFrame, str_label: str, categ: Dict[int, list]
     """
     df_out = df_in.copy()
 
-    new_lab=str_label + str_suffix_class
-    #df_out[new_lab] = None
+    new_lab = str_label + str_suffix_class
 
     for key, value in categ.items():
         class_min = value[0]
@@ -138,6 +138,7 @@ def add_lab_by_class(df_in: pd.DataFrame, str_label: str, categ: Dict[int, list]
         df_out = df_out.rename(columns={new_lab: str_label})
 
     return df_out
+
 
 def class_oversampler(df_in: pd.DataFrame, str_label: str, str_method: str = "RandomOverSampler", str_strat: str = "auto", dict_strat: dict = None) -> pd.DataFrame:
     """Oversample a dataframe
@@ -154,7 +155,7 @@ def class_oversampler(df_in: pd.DataFrame, str_label: str, str_method: str = "Ra
     """
     df_out = df_in.copy()
 
-    X = df_out.drop(str_label, axis=1,inplace=False)
+    X = df_out.drop(str_label, axis=1, inplace=False)
     y = df_out[str_label]
 
     strat = dict_strat if dict_strat is not None else str_strat
@@ -187,7 +188,7 @@ def class_undersampler(df_in: pd.DataFrame, str_label: str, str_method: str = "R
     """
     df_out = df_in.copy()
 
-    X = df_out.drop(str_label, axis=1,inplace=False)
+    X = df_out.drop(str_label, axis=1, inplace=False)
     y = df_out[str_label]
 
     strat = dict_strat if dict_strat is not None else str_strat
@@ -281,6 +282,26 @@ def yeo_johnson_transform_inverse_col(df_in: pd.DataFrame, str_col: str, pt: Pow
     return df_out
 
 
+def normalize_df(df_in: pd.DataFrame, str_label: str) -> pd.DataFrame | StandardScaler:
+    """Normalize the features of a dataset with StandaedScaler
+
+    Args:
+        df_in (pd.DataFrame): The dataset to normalize
+        str_label (str): The name of the label
+
+    Returns:
+        pd.DataFrame: The normalized dataset
+    """
+    df_out = df_in.copy()
+    col_to_norm = df_out.columns.drop(str_label)
+
+    scaler = StandardScaler()
+
+    df_out[col_to_norm] = scaler.fit_transform(df_out[col_to_norm])
+
+    return df_out, scaler
+
+
 def save_transformer(transformer: PowerTransformer, filename: str):
     """Save a PowerTransformer
 
@@ -304,6 +325,31 @@ def load_transformer(filename: str) -> PowerTransformer:
     with open(filename, 'rb') as f:
         transformer = pickle.load(f)
     return transformer
+
+
+def save_scaler(scaler: StandardScaler, filename: str):
+    """Save a StandardScaler
+
+    Args:
+        scalerer (StandardScaler): scaler to save
+        filename (str): path and name of the file
+    """
+    with open(filename, 'wb') as f:
+        pickle.dump(scaler, f)
+
+
+def load_scaler(filename: str) -> StandardScaler:
+    """Load a StandardScaler
+
+    Args:
+        filename (str): path and name of the file
+
+    Returns:
+        StandardScaler: The StandardScaler
+    """
+    with open(filename, 'rb') as f:
+        scaler = pickle.load(f)
+    return scaler
 
 
 if __name__ == "__main__":
