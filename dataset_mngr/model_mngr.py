@@ -1,11 +1,11 @@
 import numpy as np
 from scipy.stats import uniform, randint
-from sklearn.ensemble import RandomForestRegressor
-from sklearn.model_selection import RandomizedSearchCV,GridSearchCV
-import xgboost as xgb
+from sklearn.model_selection import RandomizedSearchCV, GridSearchCV
+from keras.models import Sequential
+from keras.layers import LSTM, Dense, Activation, Bidirectional
 
 
-def report_best_scores(results, n_top:int =3):
+def report_best_scores(results, n_top: int = 3):
     """_summary_
 
     Args:
@@ -22,7 +22,7 @@ def report_best_scores(results, n_top:int =3):
             print("")
 
 
-def search_cv_fit_report(estimator, params, x_train, y_train, random_state:int,method:str="grid", n_iter:int=100, cv:int=5, verbose:int=1, n_jobs:int=1,scoring:str="neg_mean_squared_error", n_top:int=3,refit:bool|str=True):
+def search_cv_fit_report(estimator, params, x_train, y_train, random_state: int, method: str = "grid", n_iter: int = 100, cv: int = 5, verbose: int = 1, n_jobs: int = 1, scoring: str = "neg_mean_squared_error", n_top: int = 3, refit: bool | str = True):
     """ Does a RandomizedSearchCV and reports best scores
 
     Args:
@@ -43,31 +43,128 @@ def search_cv_fit_report(estimator, params, x_train, y_train, random_state:int,m
     Returns:
         estimator : fitted estimator with the best model
     """
-    if method=="random":
+    if method == "random":
         fitted = RandomizedSearchCV(estimator=estimator,
                                     param_distributions=params,
                                     n_iter=n_iter,
                                     cv=cv,
                                     verbose=verbose,
                                     random_state=random_state,
-                                    n_jobs=n_jobs,scoring=scoring,error_score='raise',refit=refit)
-    else :
+                                    n_jobs=n_jobs, scoring=scoring, error_score='raise', refit=refit)
+    else:
         fitted = GridSearchCV(estimator=estimator,
-                                    param_grid=params,
-                                    cv=cv,
-                                    verbose=verbose,
-                                    n_jobs=n_jobs,scoring=scoring,error_score='raise',refit=refit)
+                              param_grid=params,
+                              cv=cv,
+                              verbose=verbose,
+                              n_jobs=n_jobs, scoring=scoring, error_score='raise', refit=refit)
 
-    fitted.fit(x_train,y_train)
+    fitted.fit(x_train, y_train)
 
-    if(verbose>0):
+    if (verbose > 0):
         print(f"Accuracy train ({scoring}) :{fitted.score(x_train,y_train)}")
 
-    if type(refit)==bool:
+    if type(refit) == bool:
         report_best_scores(fitted.cv_results_, n_top)
-    
 
     return fitted
+
+
+def create_scikeras_lstm_model(layers: list, meta: dict,  dropout: float = 0.2, activation: str = 'tanh', optimizer: str = 'adam') -> Sequential:
+    """
+    Create an scikeras LSTM model with specified hyperparameters.
+
+    Parameters:
+        window_size (int): Number of window_size in the input sequence.
+        input_dim (int): Number of input features.
+        num_classes (int): Number of output classes.
+        neurons (int): Number of neurons in the LSTM layer. Default is 64.
+        dropout (float): Dropout rate between LSTM layers. Default is 0.2.
+        activation (str): Activation function for the LSTM layer. Default is 'tanh'.
+        optimizer (str): Optimizer used for training the model. Default is 'adam'.
+
+    Returns:
+        Sequential: The constructed LSTM model.
+    """
+
+    # print(f"{meta=}")
+    n_features_in_ = meta["n_features_in_"]
+    X_shape_ = meta["X_shape_"][2]
+    n_classes_ = meta["n_classes_"]
+
+    model = Sequential()
+    # model.add(LSTM(units=neurons, dropout=dropout, activation=activation, input_shape=(window_size, input_dim)))
+    # model.add(LSTM(shape=(window_size, input_dim)))
+    for i, neurons in enumerate(layers):
+        # print(f"{i=} {neurons=} {n_features_in_=} {X_shape_=} {n_classes_}")
+        if i == 0:
+            # print("i==0")
+            model.add(LSTM(units=neurons, return_sequences=True, dropout=dropout,
+                      activation=activation,  input_shape=(n_features_in_, X_shape_)))
+            # model.add(Activation(activation))
+        elif i == len(layers)-1:
+            # print("i==count(-1)")
+            model.add(Bidirectional(
+                LSTM(units=neurons, return_sequences=False, activation=activation)))
+            # model.add(Activation(activation))
+        else:
+            # print(f" hidden  {i=}")
+            model.add(Bidirectional(LSTM(
+                units=neurons, return_sequences=True, dropout=dropout, activation=activation)))
+    # model.add(Dense(units=n_classes_, activation='softmax'))
+    model.add(Dense(units=n_classes_))
+    model.add(Activation('softmax'))
+    model.compile(loss='categorical_crossentropy',
+                  optimizer=optimizer, metrics=['accuracy'])
+    return model
+
+
+def create_sklearn_lstm_model(layers: list, input_dim: int, window_size: int, num_classes: int,  dropout: float = 0.2, activation: str = 'tanh', optimizer: str = 'adam') -> Sequential:
+    """
+    Create an SKLearn LSTM model with specified hyperparameters.
+
+    Parameters:
+        window_size (int): Number of window_size in the input sequence.
+        input_dim (int): Number of input features.
+        num_classes (int): Number of output classes.
+        neurons (int): Number of neurons in the LSTM layer. Default is 64.
+        dropout (float): Dropout rate between LSTM layers. Default is 0.2.
+        activation (str): Activation function for the LSTM layer. Default is 'tanh'.
+        optimizer (str): Optimizer used for training the model. Default is 'adam'.
+
+    Returns:
+        Sequential: The constructed LSTM model.
+    """
+
+    # print(f"{meta=}")
+    n_features_in_ = window_size
+    X_shape_ = input_dim
+    n_classes_ = num_classes
+
+    model = Sequential()
+    # model.add(LSTM(units=neurons, dropout=dropout, activation=activation, input_shape=(window_size, input_dim)))
+    # model.add(LSTM(shape=(window_size, input_dim)))
+    for i, neurons in enumerate(layers):
+        print(f"{i=} {neurons=} {n_features_in_=} {X_shape_=} {n_classes_}")
+        if i == 0:
+            # print("i==0")
+            model.add(LSTM(units=neurons, return_sequences=True, dropout=dropout,
+                      activation=activation,  input_shape=(n_features_in_, X_shape_)))
+            # model.add(Activation(activation))
+        elif i == len(layers)-1:
+            # print("i==count(-1)")
+            model.add(Bidirectional(
+                LSTM(units=neurons, return_sequences=False, activation=activation)))
+            # model.add(Activation(activation))
+        else:
+            # print(f" hidden  {i=}")
+            model.add(Bidirectional(LSTM(
+                units=neurons, return_sequences=True, dropout=dropout, activation=activation)))
+    # model.add(Dense(units=n_classes_, activation='softmax'))
+    model.add(Dense(units=n_classes_))
+    model.add(Activation('softmax'))
+    model.compile(loss='categorical_crossentropy',
+                  optimizer=optimizer, metrics=['accuracy'])
+    return model
 
 
 if __name__ == "__main__":

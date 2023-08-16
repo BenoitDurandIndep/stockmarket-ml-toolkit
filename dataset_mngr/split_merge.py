@@ -157,13 +157,13 @@ def split_df_by_label_strat(df_in: pd.DataFrame, list_label: list, prefix_key: s
     return dict_final
 
 
-def split_df_x_y(df_in: pd.DataFrame, list_features: list, str_label: str, drop_na: bool = True) -> tuple:
-    """ split a dataframe into a features datrafame and the label serie
+def split_df_x_y(df_in: pd.DataFrame, str_label: str, list_features: list=None,  drop_na: bool = True) -> tuple:
+    """ split a dataframe into a features datafame and the label serie
 
     Args:
         df_in (pd.DataFrame): dataframe to split
-        list_features (list): list of column names for features
         str_label (str): name of the label
+        list_features (list, optional): list of column names for features, if None drops str_label. Defaults to None.
         drop_na (bool, optional): if drop na before split. Defaults to True.
 
     Returns:
@@ -174,7 +174,14 @@ def split_df_x_y(df_in: pd.DataFrame, list_features: list, str_label: str, drop_
     if drop_na:
         df_tmp.dropna(inplace=True)
 
-    x_cols = df_tmp[list_features]
+    if list_features!=None:
+        if len(list_features)>0:
+            x_cols = df_tmp[list_features]
+        else:
+            raise ValueError("df_label_list is empty !")
+    else:
+        x_cols=df_tmp.drop(columns=[str_label])
+
     y_col = df_tmp[str_label]
     return x_cols, y_col
 
@@ -212,8 +219,10 @@ def split_df_strat_lstm(df_in: pd.DataFrame, str_label: str, split_strat: tuple 
     """
     # Select feature columns and label column
     df_clean = df_in.dropna(inplace=False).sort_index()
-    df_features = df_clean.drop(columns=[str_label])
-    df_label = df_clean[str_label]
+    # df_features = df_clean.drop(columns=[str_label])
+    # df_label = df_clean[str_label]
+
+    df_features,df_label=split_df_x_y(df_in=df_clean, str_label=str_label)
 
     # Perform stratified split to obtain train, valid, and test sets
     x_train, x_remaining, y_train, y_remaining = train_test_split(
@@ -244,19 +253,16 @@ def prepare_sequences(np_x: np.ndarray, np_y: np.ndarray, sequence_length: int =
     """
     Prepare sequences of features and labels for LSTM model.
     Args:
-        np_x: Input features.
-        np_y: Input labels.
-        sequence_length: Length of feature sequences for LSTM.
+        np_x (np.ndarray): Input features.
+        np_y (np.ndarray): Input labels.
+        sequence_length (int): Length of feature sequences for LSTM.
 
     Returns:
         Tuple of NumPy arrays: X_seq, y_seq.
     """
 
     num_samples = np_x.shape[0]
-    # num_features = df_X.shape[1]
-    # num_labels = len(np.unique(df_y))
 
-    # Initialize arrays for feature sequences and labels
     x_seq = []
     y_seq = []
 
@@ -265,7 +271,6 @@ def prepare_sequences(np_x: np.ndarray, np_y: np.ndarray, sequence_length: int =
         x_seq.append(np_x[i:i + sequence_length])
         y_seq.append(np_y[i + sequence_length - 1])
 
-    # Convert sequences to NumPy arrays
     x_seq = np.array(x_seq)
     y_seq = np.array(y_seq)
 
@@ -274,6 +279,41 @@ def prepare_sequences(np_x: np.ndarray, np_y: np.ndarray, sequence_length: int =
 
     return x_seq, y_seq
 
+def prepare_sequences_with_df(df_in: pd.DataFrame,str_label:str, sequence_length: int = 10) -> tuple[np.ndarray, np.ndarray,pd.DataFrame]:
+    """
+    Prepare sequences of features and labels for LSTM model.
+    Args:
+        df_x (pd.DataFrame): Input features.
+        df_y (pd.DataFrame): Input labels.
+        sequence_length (int): Length of feature sequences for LSTM.
+
+    Returns:
+        Tuple of NumPy arrays and the dataframe associated: X_seq, y_seq, df.
+    """
+    df_tmp=df_in.copy()
+    num_samples = df_tmp.shape[0]
+
+    df_x,df_y=split_df_x_y(df_in=df_tmp,str_label=str_label,drop_na=False)
+
+    x_seq = []
+    y_seq = []
+    df_ret=pd.DataFrame(columns=df_tmp.columns)
+
+    # Generate sequences
+    for i in range(num_samples - sequence_length + 1):
+        idx=i + sequence_length - 1
+        x_seq.append(df_x[i:idx+1])
+        y_seq.append(df_y[idx])
+        row=df_tmp.iloc[idx].to_frame().T
+        df_ret=pd.concat([df_ret,row],ignore_index=False)
+
+    x_seq = np.array(x_seq)
+    y_seq = np.array(y_seq)
+
+    # Convert labels to one-hot encoding
+    y_seq = pd.get_dummies(y_seq).values
+
+    return x_seq, y_seq, df_ret
 
 def join_dataframes_backtest(df_candle: pd.DataFrame, df_score: pd.DataFrame, str_col_score: str, str_col_sl: str = None, str_col_tp: str = None, int_vol_def: int = 100000, fl_sl_def: float = None, fl_tp_def: float = None) -> pd.DataFrame:
     """Join a dataframe with candles data and a dataframe with score pridction to return a dataframe ready for the backtrader part
@@ -349,3 +389,8 @@ if __name__ == "__main__":
         df_in=df_ok, str_label=lab, split_strat=(70, 15, 15), sequence_length=5)
 
     print(f"SHAPES : {df.shape=} {df_ok.shape=} {X_train.shape=}  {y_train.shape=}  {X_valid.shape=} {y_valid.shape=} {X_conf.shape=} {y_conf.shape=} ")
+
+    x_feat,y_lab,df_prep = prepare_sequences_with_df(df_in=df_ok,str_label=lab)
+
+    print(f"DF SHAPES : {df_ok.shape=} {x_feat.shape=} {y_lab.shape=} {df_prep.shape=}" )
+    print(df_prep)

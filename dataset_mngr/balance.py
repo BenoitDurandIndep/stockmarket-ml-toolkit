@@ -3,7 +3,7 @@ import pandas as pd
 import random as rd
 from typing import Dict
 import pickle
-from sklearn.preprocessing import PowerTransformer, StandardScaler
+from sklearn.preprocessing import PowerTransformer, StandardScaler, MinMaxScaler
 from imblearn.under_sampling import RandomUnderSampler, TomekLinks, NearMiss
 from imblearn.over_sampling import RandomOverSampler, SMOTE
 
@@ -282,8 +282,27 @@ def yeo_johnson_transform_inverse_col(df_in: pd.DataFrame, str_col: str, pt: Pow
     return df_out
 
 
-def normalize_df(df_in: pd.DataFrame, str_label: str) -> pd.DataFrame | StandardScaler:
+def normalize_df(df_in: pd.DataFrame, str_label: str) -> pd.DataFrame | MinMaxScaler:
     """Normalize the features of a dataset with StandaedScaler
+
+    Args:
+        df_in (pd.DataFrame): The dataset to normalize
+        str_label (str): The name of the label
+
+    Returns:
+        pd.DataFrame: The normalized dataset
+    """
+    df_out = df_in.copy()
+    col_to_norm = df_out.columns.drop(str_label)
+
+    scaler = MinMaxScaler()
+
+    df_out[col_to_norm] = scaler.fit_transform(df_out[col_to_norm])
+
+    return df_out, scaler
+
+def standardize_df(df_in: pd.DataFrame, str_label: str) -> pd.DataFrame | StandardScaler:
+    """Standardize the features of a dataset with StandaedScaler
 
     Args:
         df_in (pd.DataFrame): The dataset to normalize
@@ -300,7 +319,6 @@ def normalize_df(df_in: pd.DataFrame, str_label: str) -> pd.DataFrame | Standard
     df_out[col_to_norm] = scaler.fit_transform(df_out[col_to_norm])
 
     return df_out, scaler
-
 
 def save_transformer(transformer: PowerTransformer, filename: str):
     """Save a PowerTransformer
