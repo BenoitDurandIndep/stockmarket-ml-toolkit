@@ -86,26 +86,55 @@ def clipping_col(df_in: pd.DataFrame, str_col: str, min_val: float, max_val: flo
 
     return df_out
 
-
-def add_class(df_in: pd.DataFrame, str_label: str, nb_class: int = 10, str_suffix_class: str = "_class") -> pd.DataFrame:
-    """add a column str_label+str_suffix_class with an integer to split equally the label
-
+def add_class_by_lab_nb_lines(df_in: pd.DataFrame, str_label: str, nb_class: int = 10, bool_replace_label: bool = False, str_suffix_class: str = "_class") -> pd.DataFrame:
+    """add a column str_label+str_suffix_class with an integer to split equally the label by number of lines
+        using pd.qcut
+    
     Args:
         df_in (pd.DataFrame): dataframe to use
         str_label (str): column with the label to split
         nb_class (int): number of classes needed
-        str_suffix_class (str): suffix added to the label name for the new column
+        bool_replace_label (bool, optional): True, replace the existing label by the new one. False add a new column with the new label. Defaults to True.
+        str_suffix_class (str): suffix added to the label name for the new column. Defaults to "_class".
 
     Returns:
         pd.DataFrame: the dataframe with the str_label+str_suffix_class column
     """
     df_out = df_in.copy()
 
-    label_range = df_out[str_label].max() - df_out[str_label].min()
-    class_size = label_range / nb_class
+    new_lab = str_label + str_suffix_class
 
-    df_out[str_label + str_suffix_class] = ((df_out[str_label] -
-                                             df_out[str_label].min()) // class_size).astype(int)
+    df_out[new_lab] = pd.qcut(df_out[str_label], q=nb_class, labels=False)
+
+    if bool_replace_label:
+        df_out = df_out.drop(str_label, axis=1)
+        df_out = df_out.rename(columns={new_lab: str_label})
+
+    return df_out
+
+def add_class_by_lab_value(df_in: pd.DataFrame, str_label: str, nb_class: int = 10, bool_replace_label: bool = False, str_suffix_class: str = "_class") -> pd.DataFrame:
+    """add a column str_label+str_suffix_class with an integer to split equally the label by value
+        using pd.cut
+    
+    Args:
+        df_in (pd.DataFrame): dataframe to use
+        str_label (str): column with the label to split
+        nb_class (int): number of classes needed
+        bool_replace_label (bool, optional): True, replace the existing label by the new one. False add a new column with the new label. Defaults to True.
+        str_suffix_class (str): suffix added to the label name for the new column. Defaults to "_class".
+
+    Returns:
+        pd.DataFrame: the dataframe with the str_label+str_suffix_class column
+    """
+    df_out = df_in.copy()
+
+    new_lab = str_label + str_suffix_class
+
+    df_out[new_lab] = pd.cut(df_out[str_label], bins=nb_class, labels=False)
+
+    if bool_replace_label:
+        df_out = df_out.drop(str_label, axis=1)
+        df_out = df_out.rename(columns={new_lab: str_label})
 
     return df_out
 
@@ -225,7 +254,7 @@ def reg_undersampler_by_class(df_in: pd.DataFrame, str_label: str, str_method: s
     suffix_class = "_class"
     df_out = df_in.copy()
 
-    df_class = add_class(df_in=df_out, str_label=str_label,
+    df_class = add_class_by_lab_value(df_in=df_out, str_label=str_label,
                          nb_class=nb_class, str_suffix_class=suffix_class)
 
     lab_class = str_label+suffix_class
@@ -377,7 +406,7 @@ if __name__ == "__main__":
     ut = "D"
 
     open, close, label1, label2, label3 = rd.choices(range(10, 20), k=nb_val), rd.choices(
-        range(10, 20), k=nb_val), rd.choices(range(0, 2), k=nb_val), rd.choices(range(0, 2), k=nb_val), rd.choices(range(0, 2), k=nb_val)
+        range(10, 20), k=nb_val), rd.choices(range(-100, 100), k=nb_val), rd.choices(range(0, 2), k=nb_val), rd.choices(range(0, 2), k=nb_val)
 
     idx = pd.date_range("2022-01-01", periods=nb_val, freq=ut)
     frame = {'DATE': idx, 'OPEN': open, 'CLOSE': close,
@@ -386,6 +415,9 @@ if __name__ == "__main__":
     df = pd.DataFrame(frame)
     df.set_index('DATE', inplace=True)
     print(df.describe())
-    df_sampled = reg_undersampler_by_class(
-        df_in=df, str_label='LABEL_1', nb_class=20)
-    print(df_sampled.describe())
+
+    df_out=add_class_by_lab_nb_lines(df_in=df,str_label='LABEL_1',nb_class=5)
+    print(df_out['LABEL_1_class'].value_counts().sort_index())
+    # df_out = reg_undersampler_by_class(
+    #     df_in=df, str_label='LABEL_1', nb_class=20)
+    # print(df_out.describe())
