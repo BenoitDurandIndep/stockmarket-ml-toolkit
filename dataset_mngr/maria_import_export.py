@@ -2,7 +2,7 @@ import os
 import re
 from decouple import AutoConfig
 import pandas as pd
-from sqlalchemy import create_engine, engine, text
+from sqlalchemy import create_engine, engine, text,exc
 
 """ List of functions to import/export data from maria db
 """
@@ -51,7 +51,7 @@ def close_connection(con: engine.Connection):
     try:
         con.close()
         con.engine.dispose()
-    except:
+    except exc.SQLAlchemyError:
         pass
 
 
@@ -173,7 +173,7 @@ def get_ind_for_dts(con: engine.Connection, dts_name: str, symbol: str) -> pd.Da
   INNER JOIN ds_content dsc ON dts.SK_DATASET=dsc.SK_DATASET
   INNER JOIN symbol sym ON dsc.SK_SYMBOL=sym.SK_SYMBOL
   INNER JOIN indicator ind ON dsc.SK_INDICATOR=ind.SK_INDICATOR
-  WHERE dts.NAME='{dts_name}' AND sym.CODE='{symbol}' and ind.CODE is not null
+  WHERE dts.NAME='{dts_name}' AND sym.CODE='{symbol}' and ind.CODE is not null ORDER BY ind.SK_INDICATOR
     """
     return pd.read_sql_query(query, con)
 
@@ -214,12 +214,29 @@ def get_ind_list_for_model(con: engine.Connection, model_name: str) -> pd.DataFr
     WHERE md.NAME='{model_name}'"""
     return pd.read_sql_query(query, con)
 
+def get_header_for_model(con: engine.Connection, model_name: str) -> str:
+    """ returns the list of features ordered for a given model
+
+    Args:
+        con (engine.Connection): SQLAlchemy connection to the DB 
+        model_name (str): name of the model
+
+    Returns:
+        str: the list of features as a string "col1,col3,col4,col2" 
+    """
+    query = f"""SELECT distinct md.HEADER_DTS  FROM model md WHERE md.NAME='{model_name}' LIMIT 1"""
+    df=pd.read_sql_query(query, con)
+    return df["HEADER_DTS"][0]
 
 if __name__ == "__main__":
     symbol = "CW8"
+    model_name="CW8_DCA_CLOSE_1D_V1_lab_perf_21d_LSTM_CLASS"
     con = get_connection()
     sym = get_symbol_info(con, symbol)
+
     print(f"SK du symbol {symbol} : {sym.index[0]}")
+    print(f"header:{get_header_for_model(con,model_name)}")
 
     df_test = get_candles_to_df(con=con, symbol=symbol, date_end='2021-01-01')
     print(df_test.shape)
+

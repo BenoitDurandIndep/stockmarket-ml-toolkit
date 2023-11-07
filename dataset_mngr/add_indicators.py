@@ -1,7 +1,7 @@
 import pandas as pd
 import ta
 from sqlalchemy import engine
-from maria_import_export import get_connection, get_candles_to_df, get_ind_for_dts, get_ind_list_by_type_for_dts, get_ind_list_for_model
+from maria_import_export import get_connection, get_candles_to_df, get_ind_for_dts, get_ind_list_by_type_for_dts, get_ind_list_for_model,get_header_for_model
 
 KEY_WORDS_LIST = ["CLOSE", "OPEN", "HIGH", "LOW", "IND"]
 DEFAULT_INDIC_SEP = "$$"
@@ -41,7 +41,6 @@ def get_indicator_value(df_in: pd.DataFrame, indic_code: str, sep: str = DEFAULT
                 f"{sep}{col}{sep}", f"filtered_df['{col}']")
 
     exec_code = "filtered_df['ind_calculated']="+exec_code
-
     exec(exec_code)
 
     return filtered_df['ind_calculated']
@@ -95,8 +94,27 @@ def drop_indicators_by_type(con: engine.Connection, df_in: pd.DataFrame, dts_nam
 
     return df_clean
 
+def reorganize_columns(df: pd.DataFrame, column_order: str) -> pd.DataFrame:
+    """
+    Reorganize the column of a dataframe according to column_order
 
-def drop_indicators_not_selected(con: engine.Connection, df_in: pd.DataFrame, dts_name: str, symbol: str, label: str, algo: str) -> pd.DataFrame:
+    Args:
+        df (pd.DataFrame): input dataframe
+        column_order (str): A string with the columns' names with the new sort "col1,col3,col4,col2".
+
+    Returns:
+        pd.DataFrame: the new dataframe
+
+    Example:
+        df = reorganize_columns(df, "col1,col3,col4,col2")
+    """
+    columns = [col.strip() for col in column_order.split(',')]
+    if df.index.name in columns:
+        columns.remove(df.index.name)
+
+    return df[columns]
+
+def drop_indicators_not_selected(con: engine.Connection, df_in: pd.DataFrame, dts_name: str, symbol: str, label: str, algo: str, organize: bool = False) -> pd.DataFrame:
     """drop useless indicators of a dataframe, get indicators list from the DB with the dataset name, symbol and label and algo
 
     Args:
@@ -106,6 +124,7 @@ def drop_indicators_not_selected(con: engine.Connection, df_in: pd.DataFrame, dt
         symbol (str): Symbol for the Dataset
         label (str) : name of the studied  label in the model
         algo (str) : type of algo of the model eg : RANDOM_FOREST_REG
+        organize (bool) : If True, get the column list order from db and reorganize the df Default False
 
     Raises:
         ValueError: if no indicator found in DB for the inputs
@@ -121,6 +140,10 @@ def drop_indicators_not_selected(con: engine.Connection, df_in: pd.DataFrame, dt
         list_ind.append(label)
         cols_to_drop = list(set(df_clean.columns)-set(list_ind))
         df_clean.drop(cols_to_drop,axis=1,inplace=True)
+
+        if organize:
+            list_col = get_header_for_model(con,mod_name)
+            df_clean = reorganize_columns(df_clean, list_col)
     else:
         raise ValueError(f"no indicator found for model {mod_name}")
 

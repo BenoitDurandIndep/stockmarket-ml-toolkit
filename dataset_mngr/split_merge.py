@@ -3,7 +3,7 @@ import pandas as pd
 import random as rd
 from sklearn.model_selection import train_test_split
 
-
+ERROR_LABEL_EMPTY="df_label_list is empty !"
 
 def add_split_dataset(df_in: pd.DataFrame, split_timeframe: str = "Q", split_pattern: tuple = (60, 20, 20), clean_na: bool = True, fix_end_val: bool = True, random_split: bool = True) -> pd.DataFrame:
     """Add a column split_value in a time index dataframe,
@@ -114,7 +114,7 @@ def split_df_by_label(df_in: pd.DataFrame, list_label: list, prefix_key: str = "
             dict_ret[prefix_key+lab] = df_tmp
 
     else:
-        raise ValueError("df_label_list is empty !")
+        raise ValueError(ERROR_LABEL_EMPTY)
 
     return dict_ret
 
@@ -152,7 +152,7 @@ def split_df_by_label_strat(df_in: pd.DataFrame, list_label: list, prefix_key: s
             dict_final[key+'_valid'] = df_val
             dict_final[key+'_confirm'] = df_conf
     else:
-        raise ValueError("df_label_list is empty !")
+        raise ValueError(ERROR_LABEL_EMPTY)
 
     return dict_final
 
@@ -178,7 +178,7 @@ def split_df_x_y(df_in: pd.DataFrame, str_label: str, list_features: list=None, 
         if len(list_features)>0:
             x_cols = df_tmp[list_features]
         else:
-            raise ValueError("df_label_list is empty !")
+            raise ValueError(ERROR_LABEL_EMPTY)
     else:
         x_cols=df_tmp.drop(columns=[str_label])
 
@@ -219,8 +219,6 @@ def split_df_strat_lstm(df_in: pd.DataFrame, str_label: str, split_strat: tuple 
     """
     # Select feature columns and label column
     df_clean = df_in.dropna(inplace=False).sort_index()
-    # df_features = df_clean.drop(columns=[str_label])
-    # df_label = df_clean[str_label]
 
     df_features,df_label=split_df_x_y(df_in=df_clean, str_label=str_label)
 
@@ -284,7 +282,7 @@ def prepare_sequences_with_df(df_in: pd.DataFrame,str_label:str, sequence_length
     Prepare sequences of features and labels for LSTM model.
     Args:
         df_x (pd.DataFrame): Input features.
-        df_y (pd.DataFrame): Input labels.
+        str_label (str): Name of the label.
         sequence_length (int): Length of feature sequences for LSTM.
 
     Returns:
@@ -371,15 +369,6 @@ if __name__ == "__main__":
     df.set_index('DATE', inplace=True)
 
     # print(df)
-
-    # dict_split = split_df_by_label_strat(
-    #     df_in=df, list_label=["LABEL_1", "LABEL_2", "LABEL_3"], split_timeframe="D")
-    # print(dict_split.keys())
-    # print("**********")
-    # df_X, df_y = split_df_x_y(df_in=list(dict_split.values())[0], list_features=[
-    #                           "OPEN", "CLOSE"], str_label="LABEL_1")
-    # print(df_X)
-    # print(df_y)
 
     print("**********")
     lab = 'LABEL_1'

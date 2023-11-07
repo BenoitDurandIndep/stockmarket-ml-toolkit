@@ -418,6 +418,3 @@ if __name__ == "__main__":
 
     df_out=add_class_by_lab_nb_lines(df_in=df,str_label='LABEL_1',nb_class=5)
     print(df_out['LABEL_1_class'].value_counts().sort_index())
-    # df_out = reg_undersampler_by_class(
-    #     df_in=df, str_label='LABEL_1', nb_class=20)
-    # print(df_out.describe())

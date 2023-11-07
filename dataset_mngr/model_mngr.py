@@ -1,4 +1,5 @@
 import numpy as np
+import pandas as pd
 from scipy.stats import uniform, randint
 from sklearn.model_selection import RandomizedSearchCV, GridSearchCV
 from keras.models import Sequential
@@ -87,7 +88,6 @@ def create_scikeras_lstm_model(layers: list, meta: dict,  dropout: float = 0.2, 
     """
 
     #TODO ADD MORE OPTIONS  FOR LAYERS LIKE DENSE LAYERS 
-    # print(f"{meta=}")
     n_features_in_ = meta["n_features_in_"]
     X_shape_ = meta["X_shape_"][2]
     n_classes_ = meta["n_classes_"]
@@ -95,23 +95,21 @@ def create_scikeras_lstm_model(layers: list, meta: dict,  dropout: float = 0.2, 
     model = Sequential()
 
     for i, neurons in enumerate(layers):
-        # print(f"{i=} {neurons=} {n_features_in_=} {X_shape_=} {n_classes_}")
         if i == 0:
-            # print("i==0")
             model.add(LSTM(units=neurons, return_sequences=True, dropout=dropout,
                       activation=activation,  input_shape=(n_features_in_, X_shape_)))
         elif i == len(layers)-1:
-            # print("i==count(-1)")
             model.add(Bidirectional(
                 LSTM(units=neurons, return_sequences=False, activation=activation)))
         else:
-            # print(f" hidden  {i=}")
             model.add(Bidirectional(LSTM(
                 units=neurons, return_sequences=True, dropout=dropout, activation=activation)))
+            
     model.add(Dense(units=n_classes_))
     model.add(Activation('softmax'))
     model.compile(loss='categorical_crossentropy',
                   optimizer=optimizer, metrics=['accuracy'])
+    
     return model
 
 
@@ -149,11 +147,13 @@ def create_sklearn_lstm_model(layers: list, input_dim: int, window_size: int, nu
         else:
             model.add(Bidirectional(LSTM(
                 units=neurons, return_sequences=True, dropout=dropout, activation=activation)))
+            
     model.add(Dense(units=n_classes_))
     model.add(Activation('softmax'))
     model.compile(loss='categorical_crossentropy',
                   optimizer=optimizer, metrics=['accuracy'])
     return model
+
 
 
 if __name__ == "__main__":
