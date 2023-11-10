@@ -129,7 +129,7 @@ class BtMlDcaStrategy(bt.Strategy):
     """
     params = dict()
 
-    def __init__(self, score_buy: float = 1.0, score_sell: float = -1.0, size_buy: int = 100, size_sell: int = 100):
+    def __init__(self, score_buy: float = 1.0, score_sell: float = -1.0, size_buy: int = 100, size_sell: int = 100, reinvest_split :int =0):
         # keep track of open, close prices and predicted value in the series
         self.data_predict = self.datas[0].Predict
         self.data_open = self.datas[0].open
@@ -147,6 +147,8 @@ class BtMlDcaStrategy(bt.Strategy):
         self.top_buy = True
         self.top_sell = True
         self.prev_mt = None
+        self.reinvest_split=reinvest_split
+        self.vault = 0 #counter to reinvest sold positions
 
     # logging function
 
@@ -167,11 +169,15 @@ class BtMlDcaStrategy(bt.Strategy):
                          )
                 self.price = order.executed.price
                 self.comm = order.executed.comm
+                if self.vault>0 :
+                    self.vault-=1
                 self.top_buy = False
                 # self.log(f"TRACE TOP {self.top_buy=}")
             else:
                 self.log(f"SELL EXECUTED {order.ref} --- Price: {order.executed.price:.2f}, Cost: {order.executed.value:.2f},Commission: {order.executed.comm:.2f}, Size: {order.created.size:9.4f}"
                          )
+                if self.reinvest_split>0:
+                    self.vault+=self.reinvest_split
                 self.top_sell = False
         # report failed order
         elif order.status in [order.Canceled, order.Margin,
@@ -204,7 +210,10 @@ class BtMlDcaStrategy(bt.Strategy):
         if self.top_buy and self.data_predict >= self.score_buy and self.broker.getcash() > self.size_buy:  # GO BUY !
             # calculate the max number of shares ('all-in')
             size_max = int(self.broker.getcash() / self.datas[0].open)
-            size_ord = int(self.size_buy/(self.datas[0].open))
+            amount_buy=self.size_buy
+            if self.vault>0 :
+                amount_buy+=self.size_buy/self.reinvest_split            
+            size_ord = int(amount_buy/(self.datas[0].open))
             #self.log(f"TRACE SIZE --- {size_max=}, {size_ord=}, Predict={self.data_predict[0]}")
             if size_ord > size_max:
                 size_ord = size_max
