@@ -6,10 +6,13 @@ SELECT sk_symbol,COUNT(*),MIN(open_datetime),MAX(open_datetime) FROM candle_save
 
 SELECT OPEN_DATETIME, COUNT(*) FROM candle GROUP BY 1 HAVING COUNT(*)>1;
 
-SELECT * FROM candle WHERE  sk_symbol=2 AND open_datetime>='2023-04-01' ORDER BY 1 ;
-
-SELECT * FROM candle WHERE  sk_symbol=2 AND close IS NULL;
---DELETE FROM candle WHERE  sk_symbol=2 AND close IS NULL;
+SELECT  to_char(open_datetime,'YYYY-MM') AS MONTH ,COUNT(*) AS nb,
+MIN(open_datetime),MAX(open_datetime),MIN(close),MAX(close)   FROM candle 
+INNER JOIN symbol ON candle.SK_SYMBOL=symbol.SK_SYMBOL
+WHERE symbol.code='CW8' AND timeframe=1440 
+AND open_datetime>add_months(str_to_date(concat(to_char(CURDATE(),'YYYYMM'),'01'),'%Y%m%d'),-4)
+GROUP BY 1 ORDER BY 1 desc
+;
 
 --DELETE FROM candle
 WHERE SK_CANDLE NOT IN (
@@ -27,6 +30,7 @@ WHERE SK_CANDLE NOT IN (
 
 
 SELECT open_datetime,TIMEFRAME, COUNT(*) AS nb FROM candle WHERE SK_SYMBOL=2 GROUP BY 1,2 having nb>1 ORDER BY 1;
+
 
 /*TRUNCATE TABLE candle;*/
 
@@ -114,3 +118,8 @@ SELECT 7, SK_INDICATOR FROM ds_filtered WHERE SK_MODEL=5;
 DELETE FROM ds_filtered WHERE sk_model IN (5,6,7) AND SK_INDICATOR=38;
 
 DELETE FROM ds_filtered WHERE SK_MODEL IN (5,6,7) AND SK_INDICATOR IN (31,37,38,40,41);
+
+SELECT distinct ind.LABEL  FROM model md
+    LEFT  JOIN ds_filtered df ON md.SK_MODEL=df.SK_MODEL
+    left JOIN indicator ind ON df.SK_INDICATOR=ind.SK_INDICATOR
+    WHERE md.NAME='CW8_DCA_CLOSE_1D_21D_V1_lab_perf_21d_LSTM_CLASS';

@@ -273,15 +273,15 @@ def prepare_sequences(np_x: np.ndarray, np_y: np.ndarray, sequence_length: int =
     y_seq = np.array(y_seq)
 
     # Convert labels to one-hot encoding
-    y_seq = pd.get_dummies(y_seq).values
+    y_seq = pd.get_dummies(y_seq).to_numpy()
 
     return x_seq, y_seq
 
 def prepare_sequences_with_df(df_in: pd.DataFrame,str_label:str, sequence_length: int = 10) -> tuple[np.ndarray, np.ndarray,pd.DataFrame]:
     """
-    Prepare sequences of features and labels for LSTM model.
+    Prepare sequences of features and labels for LSTM model training.
     Args:
-        df_x (pd.DataFrame): Input features.
+        df_in (pd.DataFrame): Input features.
         str_label (str): Name of the label.
         sequence_length (int): Length of feature sequences for LSTM.
 
@@ -309,9 +309,37 @@ def prepare_sequences_with_df(df_in: pd.DataFrame,str_label:str, sequence_length
     y_seq = np.array(y_seq)
 
     # Convert labels to one-hot encoding
-    y_seq = pd.get_dummies(y_seq).values
+    y_seq = pd.get_dummies(y_seq).to_numpy()
 
     return x_seq, y_seq, df_ret
+
+def prepare_sequences_with_df(df_in: pd.DataFrame, sequence_length: int = 10) -> tuple[np.ndarray, pd.DataFrame]:
+    """
+    Prepare sequences of features for LSTM model pipeline, no label.
+    Args:
+        df_in (pd.DataFrame): Input features.
+        sequence_length (int): Length of feature sequences for LSTM.
+
+    Returns:
+        Tuple of NumPy arrays and the dataframe associated: X_seq, df.
+    """
+    df_tmp=df_in.copy()
+    df_x=df_tmp.copy()
+    num_samples = df_tmp.shape[0]
+
+    x_seq = []
+    df_ret=pd.DataFrame(columns=df_tmp.columns)
+
+    # Generate sequences
+    for i in range(num_samples - sequence_length + 1):
+        idx=i + sequence_length - 1
+        x_seq.append(df_x[i:idx+1])
+        row=df_tmp.iloc[idx].to_frame().T
+        df_ret=pd.concat([df_ret,row],ignore_index=False)
+
+    x_seq = np.array(x_seq)
+
+    return x_seq, df_ret
 
 def join_dataframes_backtest(df_candle: pd.DataFrame, df_score: pd.DataFrame, str_col_score: str, str_col_sl: str = None, str_col_tp: str = None, int_vol_def: int = 100000, fl_sl_def: float = None, fl_tp_def: float = None) -> pd.DataFrame:
     """Join a dataframe with candles data and a dataframe with score pridction to return a dataframe ready for the backtrader part

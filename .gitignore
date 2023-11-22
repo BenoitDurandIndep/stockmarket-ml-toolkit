@@ -134,6 +134,8 @@ dmypy.json
 # Useless
 todo.txt
 *sandbox*
+*.h5
+*.save
 
 # Logging
 /logs
