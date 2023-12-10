@@ -1,7 +1,7 @@
 import pandas as pd
 import ta
 from sqlalchemy import engine
-from maria_import_export import get_connection, get_candles_to_df, get_ind_for_dts, get_ind_list_by_type_for_dts, get_ind_list_for_model,get_header_for_model
+from sqlite_io import get_connection, get_candles_to_df, get_ind_for_dts, get_ind_list_by_type_for_dts, get_ind_list_for_model,get_header_for_model
 
 KEY_WORDS_LIST = ["CLOSE", "OPEN", "HIGH", "LOW", "IND"]
 DEFAULT_INDIC_SEP = "$$"

@@ -1,32 +1,11 @@
 import os
 import re
-from decouple import AutoConfig
 import pandas as pd
 from datetime import datetime as dt
 from sqlalchemy import create_engine, engine, text, exc,pool
 
 """ List of functions to import/export data from maria db
 """
-
-
-def get_conf(name: str, file_name: str = ".env", dir_path:str=None) -> str:
-    """return the value of a conf stored in file using AutoConfig
-
-    Args:
-        name (str): name of the key
-        file_name (str, optional): name of the file. Defaults to ".env".
-        dir_path (str, optional) : path of the file_name. If None in the .env directory
-
-    Returns:
-        str: the value as a string
-    """
-    if dir_path==None:
-        dir_path = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
-    
-    config = AutoConfig(search_path=os.path.join(dir_path, file_name))
-
-    return config(name, cast=str)
-
 
 def get_connection(str_db_path:str=None) -> engine.Connection:
     """ Create a new Connection instance to the marketdataenrich database
@@ -41,15 +20,21 @@ def get_connection(str_db_path:str=None) -> engine.Connection:
     """
 
     if str_db_path==None:
-        str_db_path = get_conf("SQLITE_DB_FWK")
+        try: # Try if we are in google colab or not
+            import google.colab
+            str_db_path = "/content/drive/MyDrive/COLAB/SQLITE_DB/dataset_market.db"
+        except ImportError:
+            str_db_path = "C:\Projets\Data\sqlite\dataset_market.db"
+        
 
     str_db_path=str_db_path.replace("\\","\\\\")
     conn_str = f"sqlite:///{str_db_path}"
 
+    my_con=None
     try:
         my_con=create_engine(conn_str, poolclass=pool.NullPool).connect()
     except(exc.SQLAlchemyError) as e:
-        print(f"Exception while opening connection {e}")
+        print(f"Exception while opening connection {e} at {str_db_path}")
 
     return my_con
 
@@ -109,7 +94,8 @@ def load_yahoo_df_into_sql(con: engine.Connection, df_yahoo: pd.DataFrame, symbo
 
     df_insert = df_yahoo.copy()
     df_insert.rename({'Adj Close': 'ADJ_CLOSE',
-                     'Stock Splits': 'STOCK_SPLITS'}, axis=1, inplace=True)
+                     'Stock Splits': 'STOCK_SPLITS',
+                     'Capital Gains':'CAPITAL_GAINS'}, axis=1, inplace=True)
     df_insert['OPEN_DATETIME'] = df_insert.index
     df_insert['SK_SYMBOL'] = df_symbol.index[0]
     df_insert['TIMEFRAME'] = timeframe
@@ -297,11 +283,11 @@ def get_ind_list_by_type_for_dts(con: engine.Connection, dts_name: str, symbol: 
     Returns:
         pd.DataFrame: a dataframe  with indicators data :  LABEL 
     """
-    query = f"""SELECT distinct ind.LABEL FROM dataset dts
+    query = text(f"""SELECT distinct ind.LABEL FROM dataset dts
   INNER JOIN ds_content dsc ON dts.SK_DATASET=dsc.SK_DATASET
   INNER JOIN symbol sym ON dsc.SK_SYMBOL=sym.SK_SYMBOL
   INNER JOIN indicator ind ON dsc.SK_INDICATOR=ind.SK_INDICATOR
-  WHERE dts.NAME='{dts_name}' AND sym.CODE='{symbol}' and ind.TYPE={ind_type}"""
+  WHERE dts.NAME='{dts_name}' AND sym.CODE='{symbol}' and ind.TYPE={ind_type}""")
     return pd.read_sql_query(query, con)
 
 
@@ -315,10 +301,10 @@ def get_ind_list_for_model(con: engine.Connection, model_name: str) -> pd.DataFr
     Returns:
         pd.DataFrame: a dataframe  with indicators data :  LABEL 
     """
-    query = f"""SELECT distinct ind.LABEL  FROM model md
+    query = text(f"""SELECT distinct ind.LABEL  FROM model md
     INNER JOIN ds_filtered df ON md.SK_MODEL=df.SK_MODEL
     INNER JOIN indicator ind ON df.SK_INDICATOR=ind.SK_INDICATOR
-    WHERE md.NAME='{model_name}'"""
+    WHERE md.NAME='{model_name}'""")
     return pd.read_sql_query(query, con)
 
 
@@ -332,7 +318,7 @@ def get_header_for_model(con: engine.Connection, model_name: str) -> str:
     Returns:
         str: the list of features as a string "col1,col3,col4,col2" 
     """
-    query = f"""SELECT distinct md.HEADER_DTS  FROM model md WHERE md.NAME='{model_name}' LIMIT 1"""
+    query = text(f"""SELECT distinct md.HEADER_DTS  FROM model md WHERE md.NAME='{model_name}' LIMIT 1""")
     df = pd.read_sql_query(query, con)
     return df["HEADER_DTS"][0]
 
