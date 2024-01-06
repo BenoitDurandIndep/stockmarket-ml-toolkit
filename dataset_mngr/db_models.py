@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, Text
+from sqlalchemy import Column, Integer, Text, DateTime
 from sqlalchemy.ext.declarative import declarative_base
 
 Base = declarative_base()
@@ -15,3 +15,12 @@ class Symbol(Base):
     CODE_ALPHA = Column(Text)
     CODE_YAHOO = Column(Text)
     CODE_ISIN = Column(Text)
+
+class SymbolInfo(Base):
+    __tablename__ = 'SYMBOL_INFO'
+    SK_SYMBOL_INFO = Column(Integer, primary_key=True, autoincrement=True)
+    SK_SYMBOL = Column(Integer)
+    INFO = Column(Text)
+    UPDATE_DATE = Column(DateTime)
+    ACTIVE_ROW = Column(Integer)
+    INFO_CLEAN = Column(Text)
