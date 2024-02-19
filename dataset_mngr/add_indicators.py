@@ -3,7 +3,7 @@ import ta
 from sqlalchemy import engine
 from sqlite_io import get_connection, get_candles_to_df, get_ind_for_dts, get_ind_list_by_type_for_dts, get_ind_list_for_model,get_header_for_model
 
-KEY_WORDS_LIST = ["CLOSE", "OPEN", "HIGH", "LOW", "IND"]
+KEY_WORDS_LIST = ["CLOSE", "OPEN", "HIGH", "LOW", "IND", "VOLUME"]
 DEFAULT_INDIC_SEP = "$$"
 
 
@@ -46,20 +46,23 @@ def get_indicator_value(df_in: pd.DataFrame, indic_code: str, sep: str = DEFAULT
     return filtered_df['ind_calculated']
 
 
-def add_indicators_to_df(con: engine.Connection, df_in: pd.DataFrame, dts_name: str) -> pd.DataFrame:
+def add_indicators_to_df(con: engine.Connection, df_in: pd.DataFrame, dts_name: str, symbol: str = None) -> pd.DataFrame:
     """calculates indicators series for a dataframe et returns the dataframe completed
 
     Args:
         con (engine.Connection): SQLAlchemy connection to the DB
         df_in (pd.DataFrame): Dataframe with all price data needed to calculate the indicators
         dts_name (str): Name of the dataset in the DB
+        symbol (str,optional): Symbol for the Dataset, if None get symbol from df_in.CODE Default None
 
     Returns:
         pd.DataFrame: completed dataframe with indicators
     """
     df_comp = df_in.copy()
+    if symbol==None:
+        symbol=df_comp['CODE'][0]
     df_list_ind = get_ind_for_dts(
-        con=con, dts_name=dts_name, symbol=df_comp['CODE'][0])
+        con=con, dts_name=dts_name, symbol_code=symbol)
     for row in df_list_ind.itertuples(index=False):
         df_comp[row.LABEL] = get_indicator_value(
             df_in=df_comp, indic_code=row.PY_CODE)
