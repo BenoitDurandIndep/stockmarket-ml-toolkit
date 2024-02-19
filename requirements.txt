@@ -87,7 +87,7 @@ numpy==1.23.3
 oauthlib==3.2.2
 opt-einsum==3.3.0
 packaging==21.3
-pandas==1.4.4
+pandas==2.1.4
 pandocfilters==1.5.0
 parso==0.8.3
 patsy==0.5.3
@@ -146,6 +146,7 @@ toml==0.10.2
 tornado==6.2
 traitlets==5.4.0
 typing_extensions==4.6.3
+tzdata==2023.4
 urllib3==1.26.12
 uvicorn==0.13.1
 wcwidth==0.2.5
