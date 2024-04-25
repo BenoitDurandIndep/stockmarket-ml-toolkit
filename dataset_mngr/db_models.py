@@ -23,6 +23,7 @@ class Symbol(Base):
     code_yahoo : Mapped[Optional[str]]
     code_isin : Mapped[Optional[str]]
     active : Mapped[Optional[str]]
+    tradable : Mapped[Optional[int]]
 
 
 class SymbolInfo(Base):
@@ -30,8 +31,9 @@ class SymbolInfo(Base):
 
     sk_symbol_info: Mapped[int] = mapped_column(
         primary_key=True, autoincrement=True)
-    SK_SYMBOL: Mapped[int] = mapped_column(ForeignKey("Symbol.sk_symbol"))
+    sk_symbol: Mapped[int] = mapped_column(ForeignKey("Symbol.sk_symbol"))
     info : Mapped[str]
     update_date : Mapped[datetime]
     active_row : Mapped[Optional[int]]
     info_clean : Mapped[Optional[str]]
+    sharesoutstanding : Mapped[Optional[int]]

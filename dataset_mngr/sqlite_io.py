@@ -113,7 +113,7 @@ def get_symbol(session: Session, symbol_code: str) -> Symbol:
     return res
 
 
-def get_list_symbol(session: Session,  filter_values: Dict[str, Optional[Any]] = None) -> Query:
+def get_list_symbol(session: Session, filter_values: Dict[str, Optional[Any]] = None) -> Query:
     """returns list of SYMBOL for the input filters
 
     Args:
@@ -124,8 +124,7 @@ def get_list_symbol(session: Session,  filter_values: Dict[str, Optional[Any]] =
         Query : The list of Symbol
     """
     try:
-
-        return session.query(Symbol).filter_by(**filter_values).order_by(Symbol.sk_symbol).all()
+      return session.query(Symbol).filter_by(**filter_values).order_by(Symbol.sk_symbol).all()
 
     except exc.SQLAlchemyError as e:
         print(f"Error fetching symbol info for {filter_values}: {e}")
@@ -421,6 +420,23 @@ def check_candles_last_months(con: engine.Connection, symbol_code: str, timefram
     return pd.read_sql_query(query, con, index_col='MONTH')
 
 
+def get_info_all_stock(con: engine.Connection) -> pd.DataFrame:
+    """ returns the basic information for all stocks
+
+    Args:    
+        con (engine.Connection): SQLAlchemy connection to the DB 
+    Returns:
+        pd.DataFrame: a dataframe  with stocks data : SK_SYMBOL,CODE,  NAME, TYPE , REGION, CODE_YAHOO, SHARESOUTSTANDING
+    """
+
+    query = text("""select s.sk_symbol ,s.code,s.name,s.type ,s.region,s.code_yahoo,s.tradable,si.sharesoutstanding 
+            from SYMBOL s
+            left join SYMBOL_INFO si on s.sk_symbol =si.sk_symbol and si.ACTIVE_ROW =1 
+            where s.ACTIVE =1
+            and s.type ='Stock' and s.sk_symbol <>417 order by s.sk_symbol 
+              """)
+    return pd.read_sql_query(query, con)
+
 def get_ind_for_dts(con: engine.Connection, dts_name: str, symbol_code: str) -> pd.DataFrame:
     """ returns the indicators data in a dataframe for a given dataset and a symbol
 
@@ -440,6 +456,8 @@ def get_ind_for_dts(con: engine.Connection, dts_name: str, symbol_code: str) -> 
   WHERE dts.NAME='{dts_name}' AND sym.CODE='{symbol_code}' and ind.CODE is not null ORDER BY ind.SK_INDICATOR
     """)
     return pd.read_sql_query(query, con)
+
+
 
 
 def get_ind_list_by_type_for_dts(con: engine.Connection, dts_name: str, symbol_code: str, ind_type: int = 0) -> pd.DataFrame:
@@ -520,13 +538,15 @@ if __name__ == "__main__":
 
     # my_filter = {"active": 1, "region": "France", "type": "Stock"}
     # my_res = get_list_symbol(session=session, filter_values=my_filter)
-    # print(f"{my_res=}")
+    # # print(f"{my_res=}")
     # for res in my_res:
-    #     print(f"{res.sk_symbol=}  {res.name=}")
+    #     print(f"{res.sk_symbol=}  {res.name=} ")
+    df_stocks=get_info_all_stock(con_fwk)
+    print(df_stocks.head())
 
-    df_test = get_candles_to_df(session=session,
-        con=con_CW8,symbol_code='CW8', date_start=dt.strptime('2023-01-01', '%Y-%m-%d'))
-    print(df_test.shape)
+    # df_test = get_candles_to_df(session=session,
+    #     con=con_CW8,symbol_code='CW8', date_start=dt.strptime('2023-01-01', '%Y-%m-%d'))
+    # print(df_test.shape)
 
     # last_date = get_last_candle_date(
     #     con=con_CW8, symbol=symbol, timeframe=1440)
