@@ -83,6 +83,16 @@ class Portfolio:
     def __len__(self):
         return self.nb_positions
     
+    def log(self,dt_action:pd.Timestamp, message:str, level:int=logging.INFO):
+        """ Log a message.
+
+        Args:
+            dt_action (pd.Timestamp): The date of the action.
+            message (str): The message to log.
+            level (int, optional): The logging level. Defaults to logging.INFO.
+        """
+        self.logger.log(level,f'{dt_action} {message}')
+    
     def pretty_print_in_log(self,dt_action:pd.Timestamp):
         """ Print the portfolio in the log.
 
@@ -90,7 +100,7 @@ class Portfolio:
             dt_action (pd.Timestamp): The date of the action.
         """
         pretty_positions = '\n'.join([f'{asset_code}: {pos.quantity} at {pos.avg_cost}' for asset_code, pos in self.positions.items()])
-        self.logger.info(f'{dt_action} Portfolio : cash={self.cash}, nb_positions={self.nb_positions}, positions={pretty_positions} ')
+        self.log(dt_action,f'Portfolio : cash={self.cash}, nb_positions={self.nb_positions}, positions={pretty_positions}',level=logging.INFO)
 
 
     def buy(self, asset_code: str,dt_action:pd.Timestamp, nb_stocks: int, price: float,sl:float,  commission: float = 0.0):
@@ -105,9 +115,14 @@ class Portfolio:
             sl: The stop loss of the asset.
             commission: The commission for the transaction.
         """
+
+        if nb_stocks <= 0 or price <= 0:
+            self.log(dt_action,f'Invalid number of stocks or price: {nb_stocks} {price}',level=logging.WARNING)
+            return
+
         cost = nb_stocks * price + commission
         if cost > self.cash:
-            self.logger.warning(f'{dt_action} - Not enough cash to buy {nb_stocks} of {asset_code}')
+            self.log(dt_action,f'Not enough cash to buy {nb_stocks} of {asset_code}',level=logging.WARNING)
             return
 
         if asset_code in self.positions:
@@ -117,16 +132,17 @@ class Portfolio:
                 self.cash -= cost
                 self.positions[asset_code].quantity += nb_stocks
                 self.positions[asset_code].avg_cost=tmp_avg_cost/self.positions[asset_code].quantity
-                self.logger.info(f'{dt_action} - Scale up {nb_stocks} of {asset_code}, cost: {cost}, remaining cash: {self.cash}')
+                self.log(dt_action,f'Scale up {nb_stocks} of {asset_code}, cost: {cost}, remaining cash: {self.cash}',level=logging.INFO)
             else :
-                self.logger.warning(f'{dt_action} - No scale up and {asset_code} already in positions. Not buying.')
+                self.log(dt_action,f'No scale up and {asset_code} already in positions. Not buying.',level=logging.WARNING)
         else:
 
             position = Position(order=BUY_ORDER,asset_code=asset_code, entry_price=price, quantity=nb_stocks, avg_cost=price+(commission/nb_stocks), stop_loss=sl)  
             self.positions[asset_code] = position
             self.cash -= cost
             self.nb_positions += 1
-            self.logger.info(f'{dt_action} - Bought {nb_stocks} of {asset_code}, cost: {cost}, remaining cash: {self.cash}')
+            self.log(dt_action,f'Bought {nb_stocks} of {asset_code}, cost: {cost}, remaining cash: {self.cash}',level=logging.INFO)
+
 
 
     def sell(self, asset_code: str,dt_action:pd.Timestamp, price: float, commission: float = 0.0, message:str=''):
@@ -147,20 +163,7 @@ class Portfolio:
             self.cash += revenue
             del self.positions[asset_code]
             self.nb_positions -= 1 
-            self.logger.info(f'{dt_action} - Sold {message} {nb_stocks} of {asset_code}, revenue: {revenue}, remaining cash: {self.cash}')
-
-    # ne fonctionne pas doit connetre le prix de vente, donc plutot faire une fonction qui retourne la liste des posisitions à vendre
-    def sell_all(self,dt_action:pd.Timestamp, price: float, commission: float = 0.0):
-        """
-        Sell all stocks in the portfolio.
-
-        Args:
-            dt_action: The date of the action.
-            price: The price of the stocks.
-            commission: The commission for the transaction.
-        """
-        for asset_code, pos in self.positions.items():
-            self.sell(asset_code,dt_action, price, commission)
+            self.log(dt_action,f'Sold {message} {nb_stocks} of {asset_code}, revenue: {revenue}, remaining cash: {self.cash}',level=logging.INFO)
 
 
     # def sell_stop_loss(self,dt_action:pd.Timestamp, price: float, commission: float = 0.0):
@@ -204,6 +207,10 @@ def backtest_exit_strategy(df_in:pd.DataFrame, portfolio:Portfolio, dt:pd.Timest
     """
     # iterate over the rows of the DataFrame and sell the stock if the exit signal is True
     for asset_code, pos in portfolio.positions.copy().items():
+        #check if the asset is in the dataframe
+        if (dt, asset_code) not in df_in.index:
+            portfolio.log(dt,f'Asset {asset_code} not in the dataframe',level=logging.ERROR)
+            continue
         # if the stop loss of a position is below the low of the asset, sell the stock
         if pos.stop_loss >= df_in.loc[(dt, asset_code)]['low']:
             portfolio.sell(asset_code=asset_code,dt_action=dt, price=df_in.loc[(dt, asset_code)]['low'], commission=commission, message='SL')
@@ -238,6 +245,8 @@ def backtest_entry_strategy(df_in:pd.DataFrame, portfolio:Portfolio, dt:pd.Times
 def backtest_strategy_portfolio(df_in:pd.DataFrame, initial_cash:float=10000.0, commission:float=0.0,max_positions:int=10, scale_up:bool=False,sell_all:bool=False, log_to_file:bool=False,freq_print:int=0) ->Portfolio:
     """
     Backtests a trading strategy using the given DataFrame and initial cash.
+    df_in must have a MultiIndex with the date and asset_code as the index.
+    df_in must have the following columns: entry, exit, price, low, sl, priority, nb_stocks.
 
     Args:
         df_in (pandas.DataFrame): The input DataFrame containing the trading signals.
