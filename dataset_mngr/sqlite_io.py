@@ -304,8 +304,27 @@ def get_last_candle_date(session: Session, con: engine.Connection, symbol_code: 
     dt_date = pd.to_datetime(str_date, format='%Y-%m-%d %H:%M:%S')
     return dt_date
 
+def check_date_get_candles(date=None):
+    """return the date in the good format for the DB
 
-def get_candles_to_df(session: Session, con: engine.Connection, symbol_code: str = None, target_table: str = "CANDLE", timeframe: int = 1440, only_close: bool = False, date_start=None, date_end=None) -> pd.DataFrame:
+    Args:
+        date (str or datetime, optional): the date to format YYYY-MM-DD or timestamp. Defaults to None.
+
+    Returns:
+        str: the date in YYYY-MM-DD or None
+    """
+    if date is None:
+        return None
+    if isinstance(date, dt):
+        return date.strftime("%Y-%m-%d")
+    if len(date) > 0:
+        if re.match("\d{4}-\d{2}-\d{2}", date) is not None:
+            return date
+        else:
+            raise ValueError(f"date {date} must be YYYY-MM-DD")
+    return None
+
+def get_candles_to_df(session: Session, con: engine.Connection, symbol_code: str = None, target_table: str = "CANDLE", timeframe: int = 1440, only_close: bool = False, tradable:bool = False, date_start=None, date_end=None) -> pd.DataFrame:
     """ select candles from DB to create a dataframe
 
     Args:
@@ -315,9 +334,9 @@ def get_candles_to_df(session: Session, con: engine.Connection, symbol_code: str
         target_table (str,optional): name of the table with the candles Defauls to CANDLE
         timeframe (int, optional): timeframe of the data (1D=1440) Defaults to 1440.
         only_close (bool, optional): True=only close column False=All columns. Defaults to False.
+        tradable (bool, optional): True=only tradable symbols when no symbol specified False=All symbols. Defaults to False.
         date_start (str or datetime, optional): Start of the selection YYYY-MM-DD or timestamp. Defaults to None.
         date_end (str or datetime, optional): End of the selection YYYY-MM-DD or timestamp. Defaults to None.
-
 
     Raises:
         ValueError: if dates are not in the good format or if the symbol is unknown
@@ -337,30 +356,35 @@ def get_candles_to_df(session: Session, con: engine.Connection, symbol_code: str
         list_index_col = "OPEN_DATETIME"
         objects = f"'{symbol_code}' AS CODE,OPEN_DATETIME, "
 
-    if isinstance(date_start, dt):
-        date_start = date_start.strftime("%Y-%m-%d")
+    # if isinstance(date_start, dt):
+    #     date_start = date_start.strftime("%Y-%m-%d")
 
-    if isinstance(date_end, dt):
-        date_end = date_end.strftime("%Y-%m-%d")
+    # if isinstance(date_end, dt):
+    #     date_end = date_end.strftime("%Y-%m-%d")
 
     if only_close:
         objects += "CLOSE"
     else:
         objects += "OPEN,HIGH,LOW,CLOSE,VOLUME"
 
-    pattern_date = re.compile("\d{4}-\d{2}-\d{2}")
+    # pattern_date = re.compile("\d{4}-\d{2}-\d{2}")
+    date_start = check_date_get_candles(date_start)
+    date_end = check_date_get_candles(date_end)
     cond_date = ""
-    if date_start is not None and len(date_start) > 0:
-        if pattern_date.match(date_start) is not None:
-            cond_date += f" AND OPEN_DATETIME>='{date_start}'"
-        else:
-            raise ValueError(f"date_start {date_start} must be YYYY-MM-DD")
+    if date_start is not None :
+        # if pattern_date.match(date_start) is not None:
+        cond_date += f" AND OPEN_DATETIME>='{date_start}'"
+        # else:
+            # raise ValueError(f"date_start {date_start} must be YYYY-MM-DD")
 
     if date_end is not None and len(date_end) > 0:
-        if pattern_date.match(date_end) is not None:
-            cond_date += f" AND OPEN_DATETIME<='{date_end}'"
-        else:
-            raise ValueError(f"date_end {date_end} must be YYYY-MM-DD")
+        # if pattern_date.match(date_end) is not None:
+        cond_date += f" AND OPEN_DATETIME<='{date_end}'"
+        # else:
+            # raise ValueError(f"date_end {date_end} must be YYYY-MM-DD")
+        
+    if tradable:
+        cond_symbol = "AND can.SK_SYMBOL IN (SELECT SK_SYMBOL FROM SYMBOL WHERE TRADABLE=1) "
 
     query = text(f"""SELECT {objects} FROM {target_table} can 
     WHERE can.TIMEFRAME={timeframe} {cond_symbol} {cond_date}    """)

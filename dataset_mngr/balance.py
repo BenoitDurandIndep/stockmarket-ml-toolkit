@@ -311,13 +311,36 @@ def yeo_johnson_transform_inverse_col(df_in: pd.DataFrame, str_col: str, pt: Pow
     return df_out
 
 
-def normalize_df(df_in: pd.DataFrame, str_label: str,tuple_ft_range:tuple=(0,1)) -> pd.DataFrame | MinMaxScaler:
+def normalize_df(df_in: pd.DataFrame, str_label: str=None,tuple_ft_range:tuple=(0,1)) -> pd.DataFrame | MinMaxScaler:
     """Normalize the features of a dataset with StandaedScaler
 
     Args:
         df_in (pd.DataFrame): The dataset to normalize
-        str_label (str): The name of the label
+        str_label (str): The name of the label Default None
         tuple_ft_range (tuple) : the range of the normalize Default (0,1)
+
+    Returns:
+        pd.DataFrame: The normalized dataset
+    """
+    df_out = df_in.copy()
+    if str_label is None:
+        col_to_norm = df_out.columns
+    else:
+        col_to_norm = df_out.columns.drop(str_label)
+
+    scaler = MinMaxScaler(feature_range=tuple_ft_range)
+
+    df_out[col_to_norm] = scaler.fit_transform(df_out[col_to_norm])
+
+    return df_out, scaler
+
+def normalize_df_scaler(df_in: pd.DataFrame, str_label: str,scaler:MinMaxScaler) -> pd.DataFrame:
+    """Normalize the features of a dataset with MinMaxScaler
+
+    Args:
+        df_in (pd.DataFrame): The dataset to normalize
+        str_label (str): The name of the label
+        scaler (MinMaxScaler): The MinMaxScaler used for the normalization
 
     Returns:
         pd.DataFrame: The normalized dataset
@@ -325,11 +348,27 @@ def normalize_df(df_in: pd.DataFrame, str_label: str,tuple_ft_range:tuple=(0,1))
     df_out = df_in.copy()
     col_to_norm = df_out.columns.drop(str_label)
 
-    scaler = MinMaxScaler(feature_range=tuple_ft_range)
+    df_out[col_to_norm] = scaler.transform(df_out[col_to_norm])
 
-    df_out[col_to_norm] = scaler.fit_transform(df_out[col_to_norm])
+    return df_out
 
-    return df_out, scaler
+def normalize_df_inverse(df_in: pd.DataFrame, str_label: str,scaler:MinMaxScaler) -> pd.DataFrame:
+    """Inverse the normalization of a dataset with MinMaxScaler
+
+    Args:
+        df_in (pd.DataFrame): The dataset to normalize
+        str_label (str): The name of the label
+        scaler (MinMaxScaler): The MinMaxScaler used for the normalization
+
+    Returns:
+        pd.DataFrame: The normalized dataset
+    """
+    df_out = df_in.copy()
+    col_to_norm = df_out.columns.drop(str_label)
+
+    df_out[col_to_norm] = scaler.inverse_transform(df_out[col_to_norm])
+
+    return df_out
 
 def standardize_df(df_in: pd.DataFrame, str_label: str) -> pd.DataFrame | StandardScaler:
     """Standardize the features of a dataset with StandaedScaler
