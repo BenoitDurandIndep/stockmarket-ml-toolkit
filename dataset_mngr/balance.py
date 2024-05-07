@@ -58,7 +58,8 @@ def range_undersampler(df_in: pd.DataFrame, str_label: str, min_val: float, max_
     mask = (df_in[str_label] >= min_val) & (df_in[str_label] <= max_val)
 
     # Proba for cleaning a line
-    prob_clean = np.random.random(size=len(df_in))
+    rng = np.random.default_rng(42)
+    prob_clean = rng.random(size=len(df_in))
     prob_masked = prob_clean <= clean_rate
     rows_to_remove = prob_masked & mask
 
@@ -229,7 +230,7 @@ def class_undersampler(df_in: pd.DataFrame, str_label: str, str_method: str = "R
     else:
         method = RandomUnderSampler(sampling_strategy=strat)
 
-    x_samp, y_samp = method.fit_resample(X, y)
+    x_samp, _ = method.fit_resample(X, y)
     # get index from previous df
     x_samp.index = X.index[method.sample_indices_]
 
@@ -268,7 +269,7 @@ def reg_undersampler_by_class(df_in: pd.DataFrame, str_label: str, str_method: s
         method = TomekLinks(sampling_strategy=str_strat)
     else:
         method = RandomUnderSampler(sampling_strategy=str_strat)
-    x_samp, y_samp = method.fit_resample(X, y)
+    x_samp, _ = method.fit_resample(X, y)
     # get index from previous df
     x_samp.index = X.index[method.sample_indices_]
 

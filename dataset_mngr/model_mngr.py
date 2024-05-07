@@ -76,8 +76,9 @@ def create_scikeras_lstm_model(layers: list, meta: dict,  dropout: float = 0.2, 
     Create an scikeras LSTM model with specified hyperparameters.
 
     Parameters:
+        layers (list): List of layers to be added to the model. Each layer is a tuple with layer[0]=type (LSTM or Dense) and layer[1] number of neurons in the layer.
         window_size (int): Number of window_size in the input sequence.
-        input_dim (int): Number of input features.
+        n_features_in_ (int): Number of input features.
         num_classes (int): Number of output classes.
         neurons (int): Number of neurons in the LSTM layer. Default is 64.
         dropout (float): Dropout rate between LSTM layers. Default is 0.2.
@@ -86,26 +87,40 @@ def create_scikeras_lstm_model(layers: list, meta: dict,  dropout: float = 0.2, 
 
     Returns:
         Sequential: The constructed LSTM model.
+
+    Raises:
+        ValueError: If the layer type is not supported. Must be LSTM or Dense.
     """
 
-    #TODO ADD MORE OPTIONS  FOR LAYERS LIKE DENSE LAYERS 
     n_features_in_ = meta["n_features_in_"]
-    X_shape_ = meta["X_shape_"][2]
+    x_shape_ = meta["X_shape_"][2]
     n_classes_ = meta["n_classes_"]
 
     model = Sequential()
 
-    for i, neurons in enumerate(layers):
-        if i == 0:
-            model.add(LSTM(units=neurons, return_sequences=True, dropout=dropout,
-                      activation=activation,  input_shape=(n_features_in_, X_shape_)))
-        elif i == len(layers)-1:
-            model.add(Bidirectional(
-                LSTM(units=neurons, return_sequences=False, activation=activation)))
+    for i, layer in enumerate(layers):
+        if len(layer) == 1:
+            layer_type = "LSTM"
+            neurons = layer[0]
         else:
-            model.add(Bidirectional(LSTM(
-                units=neurons, return_sequences=True, dropout=dropout, activation=activation)))
-            
+            layer_type = layer[0]
+            neurons = layer[1]
+        # print(f"{i=} {neurons=} {layer_type=} {layer=} ")
+        if layer_type == "LSTM":
+            if i == 0:
+                model.add(LSTM(units=neurons, return_sequences=True, dropout=dropout,
+                        activation=activation,  input_shape=(n_features_in_, x_shape_)))
+            elif i == len(layers)-1:#last LSTM layer
+                model.add(Bidirectional(
+                    LSTM(units=neurons, return_sequences=False, activation=activation)))
+            else:
+                model.add(Bidirectional(LSTM(
+                    units=neurons, return_sequences=True, dropout=dropout, activation=activation)))
+        elif layer_type == "Dense":   
+             model.add(Dense(units=neurons, activation=activation))
+        else:
+            raise ValueError(f"Layer type {layer[0]} not supported , must be LSTM or Dense.")
+
     model.add(Dense(units=n_classes_))
     model.add(Activation('softmax'))
     model.compile(loss='categorical_crossentropy',
@@ -132,16 +147,16 @@ def create_sklearn_lstm_model(layers: list, input_dim: int, window_size: int, nu
     """
 
     n_features_in_ = window_size
-    X_shape_ = input_dim
+    x_shape_ = input_dim
     n_classes_ = num_classes
 
     model = Sequential()
 
     for i, neurons in enumerate(layers):
-        print(f"{i=} {neurons=} {n_features_in_=} {X_shape_=} {n_classes_}")
+        print(f"{i=} {neurons=} {n_features_in_=} {x_shape_=} {n_classes_}")
         if i == 0:
             model.add(LSTM(units=neurons, return_sequences=True, dropout=dropout,
-                      activation=activation,  input_shape=(n_features_in_, X_shape_)))
+                      activation=activation,  input_shape=(n_features_in_, x_shape_)))
         elif i == len(layers)-1:
             model.add(Bidirectional(
                 LSTM(units=neurons, return_sequences=False, activation=activation)))
@@ -158,4 +173,9 @@ def create_sklearn_lstm_model(layers: list, input_dim: int, window_size: int, nu
 
 
 if __name__ == "__main__":
-    print("No test for this module yet.")
+    
+    meta = {"window_size": 10, "X_shape_": (None, 10, 5), "n_classes_": 3,"n_features_in_":5}
+    model = create_scikeras_lstm_model(layers=[("LSTM",128), ("Dense",64), ("LSTM",64),("Dense",32), ("LSTM",32)], meta=meta)
+    print(model.summary())
+
+
