@@ -1,0 +1,13 @@
+services:
+  jupyter-lab:
+    build:
+      context: ./docker/tensorflow
+      dockerfile: Dockerfile
+    ports:
+      - "8888:8888"
+    volumes:
+      - ./mnt/dataset_mngr:/usr/local/dev/dataset_mngr
+      - ./mnt/code:/usr/local/dev/code
+      - ./mnt/models:/usr/local/models
+      - "C:/Projets/Data/DTS_FULL:/Data/DTS_FULL:ro"
+    deploy:
