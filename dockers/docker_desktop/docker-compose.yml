@@ -9,5 +9,11 @@ services:
       - ./mnt/dataset_mngr:/usr/local/dev/dataset_mngr
       - ./mnt/code:/usr/local/dev/code
       - ./mnt/models:/usr/local/models
-      - "C:/Projets/Data/DTS_FULL:/Data/DTS_FULL:ro"
+      - "G:/Python/Data/FULL:/Data/DTS_FULL:ro"
     deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
