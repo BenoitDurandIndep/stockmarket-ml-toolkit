@@ -131,9 +131,9 @@ def create_scikeras_lstm_model(layers: list, meta: dict,  dropout: float = 0.2, 
     return model
 
 
-def create_sklearn_lstm_model(layers: list, input_dim: int, window_size: int, num_classes: int,  dropout: float = 0.2, activation: str = 'tanh', optimizer: str = 'adam') -> Sequential:
+def create_keras_lstm_model(layers: list, input_dim: int, window_size: int, num_classes: int,  dropout: float = 0.2, activation: str = 'tanh', optimizer: str = 'adam') -> Sequential:
     """
-    Create an SKLearn LSTM model with specified hyperparameters.
+    Create an Keras LSTM model with specified hyperparameters.
 
     Parameters:
         window_size (int): Number of window_size in the input sequence.

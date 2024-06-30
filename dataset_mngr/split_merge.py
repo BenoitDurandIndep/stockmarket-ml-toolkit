@@ -222,11 +222,12 @@ def split_df_strat_lstm(df_in: pd.DataFrame, str_label: str, split_strat: tuple 
 
     df_features,df_label=split_df_x_y(df_in=df_clean, str_label=str_label)
 
+    seed=42 
     # Perform stratified split to obtain train, valid, and test sets
     x_train, x_remaining, y_train, y_remaining = train_test_split(
-        df_features, df_label, train_size=split_strat[0]*0.01, stratify=df_label)
+        df_features, df_label, train_size=split_strat[0]*0.01, stratify=df_label,random_state=seed)
     x_valid, x_conf, y_valid, y_conf = train_test_split(
-        x_remaining, y_remaining, train_size=split_strat[1] / (split_strat[1] + split_strat[2]), stratify=y_remaining)
+        x_remaining, y_remaining, train_size=split_strat[1] / (split_strat[1] + split_strat[2]), stratify=y_remaining,random_state=seed)
 
     # Convert data to NumPy arrays
     x_train = x_train.values
@@ -246,6 +247,46 @@ def split_df_strat_lstm(df_in: pd.DataFrame, str_label: str, split_strat: tuple 
 
     return x_train_lstm, y_train_lstm, x_valid_lstm, y_valid_lstm, x_conf_lstm, y_test_lstm
 
+
+def prepare_sequences_df(df_in: pd.DataFrame, list_features: list, sequence_length: int = 10, str_new_col: str = "sequence", int_round: int =5) -> pd.DataFrame:
+    """
+    Prepare sequences of features and labels for LSTM model.
+    Args:
+        df_in (pd.DataFrame): Input DataFrame.
+        list_features (list): List of feature column names.
+        sequence_length (int): Length of feature sequences for LSTM Default 10.
+        str_new_col (str): Name of the new column to store the sequences Default sequence.
+        int_round (int): Number of decimal places to round the features Default 5.
+
+    Returns:
+        pd.DataFrame: DataFrame with new column of sequences.
+    """
+
+    # Function to generate sequence for a row
+    def generate_sequence(idx):
+        if idx < sequence_length - 1:
+            return None
+        else:
+            return np.round([df_out.loc[i, list_features].tolist() for i in range(idx - sequence_length + 1, idx + 1)],int_round)
+        
+    df_out = df_in.copy()
+        
+    # test if df_in has 2 index
+    if len(df_out.index.names) != 2:
+        # Apply function to each row
+        df_out[str_new_col] = [generate_sequence(i) for i in range(len(df_out))]
+    else:
+        # sort data by index and move the 2 index to columns
+        df_out.sort_index(inplace=True)
+        df_out.reset_index(inplace=True)
+
+        # Apply function to each row
+        df_out[str_new_col] = [generate_sequence(i) for i in range(len(df_out))]
+
+        # set index back
+        df_out.set_index([df_out.columns[0],df_out.columns[1]], inplace=True,)
+
+    return df_out
 
 def prepare_sequences(np_x: np.ndarray, np_y: np.ndarray, sequence_length: int = 10) -> tuple[np.ndarray, np.ndarray]:
     """
@@ -276,70 +317,6 @@ def prepare_sequences(np_x: np.ndarray, np_y: np.ndarray, sequence_length: int =
     y_seq = pd.get_dummies(y_seq).to_numpy()
 
     return x_seq, y_seq
-
-def prepare_sequences_with_df(df_in: pd.DataFrame,str_label:str, sequence_length: int = 10) -> tuple[np.ndarray, np.ndarray,pd.DataFrame]:
-    """
-    Prepare sequences of features and labels for LSTM model training.
-    Args:
-        df_in (pd.DataFrame): Input features.
-        str_label (str): Name of the label.
-        sequence_length (int): Length of feature sequences for LSTM.
-
-    Returns:
-        Tuple of NumPy arrays and the dataframe associated: X_seq, y_seq, df.
-    """
-    df_tmp=df_in.copy()
-    num_samples = df_tmp.shape[0]
-
-    df_x,df_y=split_df_x_y(df_in=df_tmp,str_label=str_label,drop_na=False)
-
-    x_seq = []
-    y_seq = []
-    df_ret=pd.DataFrame(columns=df_tmp.columns)
-
-    # Generate sequences
-    for i in range(num_samples - sequence_length + 1):
-        idx=i + sequence_length - 1
-        x_seq.append(df_x[i:idx+1])
-        y_seq.append(df_y[idx])
-        row=df_tmp.iloc[idx].to_frame().T
-        df_ret=pd.concat([df_ret,row],ignore_index=False)
-
-    x_seq = np.array(x_seq)
-    y_seq = np.array(y_seq)
-
-    # Convert labels to one-hot encoding
-    y_seq = pd.get_dummies(y_seq).to_numpy()
-
-    return x_seq, y_seq, df_ret
-
-def prepare_sequences_with_df(df_in: pd.DataFrame, sequence_length: int = 10) -> tuple[np.ndarray, pd.DataFrame]:
-    """
-    Prepare sequences of features for LSTM model pipeline, no label.
-    Args:
-        df_in (pd.DataFrame): Input features.
-        sequence_length (int): Length of feature sequences for LSTM.
-
-    Returns:
-        Tuple of NumPy arrays and the dataframe associated: X_seq, df.
-    """
-    df_tmp=df_in.copy()
-    df_x=df_tmp.copy()
-    num_samples = df_tmp.shape[0]
-
-    x_seq = []
-    df_ret=pd.DataFrame(columns=df_tmp.columns)
-
-    # Generate sequences
-    for i in range(num_samples - sequence_length + 1):
-        idx=i + sequence_length - 1
-        x_seq.append(df_x[i:idx+1])
-        row=df_tmp.iloc[idx].to_frame().T
-        df_ret=pd.concat([df_ret,row],ignore_index=False)
-
-    x_seq = np.array(x_seq)
-
-    return x_seq, df_ret
 
 def join_dataframes_backtest(df_candle: pd.DataFrame, df_score: pd.DataFrame, str_col_score: str, str_col_sl: str = None, str_col_tp: str = None, int_vol_def: int = 100000, fl_sl_def: float = None, fl_tp_def: float = None) -> pd.DataFrame:
     """Join a dataframe with candles data and a dataframe with score pridction to return a dataframe ready for the backtrader part
