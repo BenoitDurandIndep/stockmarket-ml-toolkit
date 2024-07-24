@@ -136,6 +136,9 @@ todo.txt
 *sandbox*
 *.h5
 *.save
+events.out.tfevents.*
+hparams*
+*.ckpt
 
 # Logging
 /logs
