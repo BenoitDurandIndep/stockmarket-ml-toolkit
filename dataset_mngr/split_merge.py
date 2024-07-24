@@ -72,7 +72,7 @@ def split_df_by_split_value(df_in: pd.DataFrame, column_name: str = "split_value
     """
     df_tmp = df_in.copy()
     nb_split = (df_tmp[column_name].max())+1
-    df_splitted = ["empty", ]*nb_split
+    df_splitted = ["empty", ]*3 # force at 3 elements to avoid error
 
     if column_name in df_in.columns:
         for i in range(0, nb_split):
@@ -147,10 +147,13 @@ def split_df_by_label_strat(df_in: pd.DataFrame, list_label: list, prefix_key: s
         for key, value in dict_df_label.items():
             df_split = add_split_dataset(
                 df_in=value, split_timeframe=split_timeframe, split_pattern=split_strat, fix_end_val=fix_end_val, random_split=random_split)
+            
             df_train, df_val, df_conf = split_df_by_split_value(df_in=df_split)
             dict_final[key+'_train'] = df_train
             dict_final[key+'_valid'] = df_val
-            dict_final[key+'_confirm'] = df_conf
+            if split_strat[2] > 0:
+                dict_final[key+'_confirm'] = df_conf
+
     else:
         raise ValueError(ERROR_LABEL_EMPTY)
 
@@ -384,7 +387,7 @@ if __name__ == "__main__":
 
     print(f"SHAPES : {df.shape=} {df_ok.shape=} {X_train.shape=}  {y_train.shape=}  {X_valid.shape=} {y_valid.shape=} {X_conf.shape=} {y_conf.shape=} ")
 
-    x_feat,y_lab,df_prep = prepare_sequences_with_df(df_in=df_ok,str_label=lab)
+    df_prep = prepare_sequences_df(df_in=df_ok,list_features=['OPEN','CLOSE'],sequence_length=3)
 
-    print(f"DF SHAPES : {df_ok.shape=} {x_feat.shape=} {y_lab.shape=} {df_prep.shape=}" )
+    print(f"DF SHAPES : {df_ok.shape=} {df_prep.shape=}" )
     print(df_prep)

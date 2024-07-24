@@ -42,6 +42,24 @@ def exp_transform_label(df_in: pd.DataFrame, str_label: str, fl_shift: float = 0
     return df_out
 
 
+def class_custom_undersampler(df_in: pd.DataFrame, str_label: str, nb_per_class:int) -> pd.DataFrame:
+    """Undersample a dataframe with a RandomUnderSampler strat auto
+
+    Args:
+        df_in (pd.DataFrame): dataframe to undersample
+        str_label (str): column with the classification label
+        nb_per_class (int): number of lines per class
+
+    Returns:
+        pd.DataFrame: the dataframe undersampled
+    """
+    # Group the dataframe by the label column and apply sampling
+    df_resampled = df_in.groupby(str_label).apply(lambda x: x.sample(min(len(x), nb_per_class)))
+
+    df_resampled = df_resampled.droplevel(str_label).sort_index()
+    
+    return df_resampled
+
 def range_undersampler(df_in: pd.DataFrame, str_label: str, min_val: float, max_val: float, clean_rate: float) -> pd.DataFrame:
     """ randomly drop some lines of a dataframe if the value of the specified column is between min_val and max_val
 
