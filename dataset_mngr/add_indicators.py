@@ -1,5 +1,6 @@
 import pandas as pd
-import ta
+import talib
+import pandas_ta as ta
 from sqlalchemy import engine
 from sqlite_io import get_connection, get_candles_to_df, get_ind_for_dts, get_ind_list_by_type_for_dts, get_ind_list_for_model,get_header_for_model
 
@@ -41,7 +42,10 @@ def get_indicator_value(df_in: pd.DataFrame, indic_code: str, sep: str = DEFAULT
                 f"{sep}{col}{sep}", f"filtered_df['{col}']")
 
     exec_code = "filtered_df['ind_calculated']="+exec_code
-    exec(exec_code)
+    try:
+        exec(exec_code)
+    except Exception as e:
+        print(f"error in code {indic_code=} {exec_code=}: {e}")
 
     return filtered_df['ind_calculated']
 

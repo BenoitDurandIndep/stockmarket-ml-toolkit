@@ -324,7 +324,8 @@ def check_date_get_candles(date=None):
             raise ValueError(f"date {date} must be YYYY-MM-DD")
     return None
 
-def get_candles_to_df(session: Session, con: engine.Connection, symbol_code: str = None, target_table: str = "CANDLE", timeframe: int = 1440, only_close: bool = False, tradable:bool = False, date_start=None, date_end=None) -> pd.DataFrame:
+def get_candles_to_df(session: Session, con: engine.Connection, symbol_code: str = None, target_table: str = "CANDLE", timeframe: int = 1440,
+                       only_close: bool = False,columns_name: str="OPEN,HIGH,LOW,CLOSE,VOLUME", tradable:bool = False, skip_cond:bool = False, date_start=None, date_end=None) -> pd.DataFrame:
     """ select candles from DB to create a dataframe
 
     Args:
@@ -334,7 +335,9 @@ def get_candles_to_df(session: Session, con: engine.Connection, symbol_code: str
         target_table (str,optional): name of the table with the candles Defauls to CANDLE
         timeframe (int, optional): timeframe of the data (1D=1440) Defaults to 1440.
         only_close (bool, optional): True=only close column False=All columns. Defaults to False.
+        columns_name (str, optional): the columns to select Defaults to "OPEN,HIGH,LOW,CLOSE,VOLUME"
         tradable (bool, optional): True=only tradable symbols when no symbol specified False=All symbols. Defaults to False.
+        skip_cond (bool, optional): True=skip the conditions False=use the symbol and timeframe condition. Defaults to False.
         date_start (str or datetime, optional): Start of the selection YYYY-MM-DD or timestamp. Defaults to None.
         date_end (str or datetime, optional): End of the selection YYYY-MM-DD or timestamp. Defaults to None.
 
@@ -356,18 +359,11 @@ def get_candles_to_df(session: Session, con: engine.Connection, symbol_code: str
         list_index_col = "OPEN_DATETIME"
         objects = f"'{symbol_code}' AS CODE,OPEN_DATETIME, "
 
-    # if isinstance(date_start, dt):
-    #     date_start = date_start.strftime("%Y-%m-%d")
-
-    # if isinstance(date_end, dt):
-    #     date_end = date_end.strftime("%Y-%m-%d")
-
     if only_close:
         objects += "CLOSE"
     else:
-        objects += "OPEN,HIGH,LOW,CLOSE,VOLUME"
+        objects += columns_name
 
-    # pattern_date = re.compile("\d{4}-\d{2}-\d{2}")
     date_start = check_date_get_candles(date_start)
     date_end = check_date_get_candles(date_end)
     cond_date = ""
@@ -386,8 +382,10 @@ def get_candles_to_df(session: Session, con: engine.Connection, symbol_code: str
     if tradable:
         cond_symbol = "AND can.SK_SYMBOL IN (SELECT SK_SYMBOL FROM SYMBOL WHERE TRADABLE=1) "
 
-    query = text(f"""SELECT {objects} FROM {target_table} can 
-    WHERE can.TIMEFRAME={timeframe} {cond_symbol} {cond_date}    """)
+    str_query = f"SELECT {objects} FROM {target_table} can"
+    if skip_cond==False:
+        str_query = f"{str_query} WHERE can.TIMEFRAME={timeframe} {cond_symbol} {cond_date} "
+    query=text(str_query)
     print(f"DEBUG: {query}")
 
     return pd.read_sql_query(query, con, index_col=list_index_col)
