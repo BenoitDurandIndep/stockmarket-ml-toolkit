@@ -46,7 +46,7 @@ class GetDataAlphaVantage:
             Parameters : 
                 keyword(str) : keyword to search for
                 type(str) : type of asset (Equity,ETF,FULL)
-                region(bool) : marketplace (United States, United Kingdon, Paris, Frankfurt)
+                region(str) : marketplace (United States, United Kingdon, Paris, Frankfurt)
 
             Returns:
                 a tuple with 
@@ -144,7 +144,8 @@ class GetDataAlphaVantage:
 if __name__ == "__main__":
     get_data_alpha = GetDataAlphaVantage()
     symbol="SAN"
-    df_symb, meta = get_data_alpha.search_symbol(keyword="SAN.PAR")
+    keyword="DAX"
+    df_symb, meta = get_data_alpha.search_symbol(keyword=keyword,type="FULL")
     pprint(df_symb)
     # df_over, meta = get_data_alpha.get_overview(symbol=symbol)
     # pprint(df_over)
