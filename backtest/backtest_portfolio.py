@@ -94,6 +94,11 @@ class Portfolio:
         """
         self.logger.log(level,f'{dt_action} {message}')
     
+    def close_logger(self):
+        for handler in self.logger.handlers:
+            handler.close()
+            self.logger.removeHandler(handler)
+
     def pretty_print_in_log(self,dt_action:pd.Timestamp):
         """ Print the portfolio in the log.
 
@@ -330,6 +335,8 @@ def backtest_strategy_portfolio(df_in:pd.DataFrame, initial_cash:float=10000.0, 
     if sell_all:
         for asset_code in portfolio.positions.copy():
             portfolio.sell(asset_code=asset_code,dt_action=dt, price=df_group.loc[(dt, asset_code)]['price'], commission=commission, message=' LIQUIDATE')
+
+    portfolio.close_logger()
 
     return portfolio
 

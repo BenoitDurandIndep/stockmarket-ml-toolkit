@@ -24,7 +24,9 @@ def report_best_scores(results, n_top: int = 3):
             print("")
 
 
-def search_cv_fit_report(estimator, params, x_train, y_train,eval_set:dict={},  method: str = "grid", n_iter: int = 100, cv: int = 5, verbose: int = 1, n_jobs: int = 1, scoring: str = "neg_mean_squared_error", n_top: int = 3, refit: bool | str = True):
+def search_cv_fit_report(estimator, params, x_train, y_train,eval_set:dict={},  method: str = "grid", n_iter: int = 100,
+                          cv: int = 5, verbose: int = 1, n_jobs: int = 1, scoring=None, 
+                          n_top: int = 3, refit: bool | str = True, callbacks=None):
     """ Does a RandomizedSearchCV and reports best scores
 
     Args:
@@ -32,15 +34,16 @@ def search_cv_fit_report(estimator, params, x_train, y_train,eval_set:dict={},  
         params (dict): Dictionnary with params
         x_train (pd.DataFrame) : training dataset
         y_train (serie) : label of training dataset
-        eval_set (dict, optional) : evaluation set [(X,y)]. Defaults to None
+        eval_set (dict, optional) : evaluation set [(X,y)]. Defaults to empty dict
         method (str, optional) : optimiszation method grid or random. Defaults to grid.
         n_iter (int, optional): nb of param settings that are sampled. Defaults to 100.
         cv (int, optional): nb folds. Defaults to 5.
-        verbose (int, optional): verbosity (0-3). Defaults to 1.
+        verbose (int, optional): verbosity (0-4). Defaults to 1.
         n_jobs (int, optional): n jobs in parallel. Defaults to 1.
-        scoring (str, optional) : scoring method. Defaults to neg_mean_squared_error #squared_error, f1.
+        scoring (str, optional) : scoring method. Defaults to None ### neg_mean_squared_error #squared_error, f1.
         n_top (int, optional): nb models showed. Defaults to 3.
         refit(bool|str, optional): Refit an estimator using the best found parameters on the whole dataset. Defaults to True
+        callbacks (function, optional): callback function. Defaults to None
 
     Returns:
         estimator : fitted estimator with the best model
@@ -60,7 +63,10 @@ def search_cv_fit_report(estimator, params, x_train, y_train,eval_set:dict={},  
                               verbose=verbose,
                               n_jobs=n_jobs, scoring=scoring, error_score='raise', refit=refit)
 
-    fitted.fit(x_train, y_train,eval_set=eval_set)
+    if eval_set == {}:
+        fitted.fit(x_train, y_train, callbacks=callbacks)
+    else:
+        fitted.fit(x_train, y_train,eval_set=eval_set, callbacks=callbacks)
 
     if (verbose > 0):
         print(f"Accuracy train ({scoring}) :{fitted.score(x_train,y_train)}")

@@ -2,6 +2,7 @@ import pandas as pd
 import talib
 import pandas_ta as ta
 from sqlalchemy import engine
+from sqlalchemy.orm import sessionmaker
 from sqlite_io import get_connection, get_candles_to_df, get_ind_for_dts, get_ind_list_by_type_for_dts, get_ind_list_for_model,get_header_for_model
 
 KEY_WORDS_LIST = ["CLOSE", "OPEN", "HIGH", "LOW", "IND", "VOLUME"]
@@ -158,16 +159,23 @@ def drop_indicators_not_selected(con: engine.Connection, df_in: pd.DataFrame, dt
 
 
 if __name__ == "__main__":
-    code = "ta.trend.SMAIndicator(close=$$CLOSE$$,window=20).sma_indicator()"
-    con = get_connection()
+    code = "ta.trix(close=$$CLOSE$$,length=12)"
+#     PATH_DATA = "G:\\Python\\Data\\sqlite\\dataset_paris_stock_adjusted.db"
+# PATH_DB_FWK=PATH_DATA+"\\sqlite\\dataset_market.db"
+# PATH_DB_STOCK=PATH_DATA+"\\sqlite\\dataset_paris_stock_adjusted.db"
+    con = get_connection("G:\\Python\\Data\\sqlite\\dataset_paris_stock_adjusted.db")
+    my_session_maker = sessionmaker(bind=con)
+    session=my_session_maker()
     symb = "CW8"
     dts = "DCA_CLOSE_1D_V1"
     label="lab_perf_21d"
     algo="RANDOM_FOREST_REG"
-    df = get_candles_to_df(con=con, symbol=symb, only_close=True)
-    df = add_indicators_to_df(con=con, df_in=df, dts_name=dts)
-    print(df[50:55])
-    df = drop_indicators_by_type(con, df, dts, symb, 0)
-    print(df[50:55])
-    df=drop_indicators_not_selected(con, df, dts, symb,label,algo)
-    print(df[50:55])
+    df = get_candles_to_df(session=session,con=con, target_table="DS_PARIS_1D_ADJ_CLEAN")
+    df_toto=ta.trix(close=df['CLOSE'][0:100],length=12)
+    print(df_toto)
+    # df = add_indicators_to_df(con=con, df_in=df, dts_name=dts)
+    # print(df[50:55])
+    # df = drop_indicators_by_type(con, df, dts, symb, 0)
+    # print(df[50:55])
+    # df=drop_indicators_not_selected(con, df, dts, symb,label,algo)
+    # print(df[50:55])
