@@ -100,8 +100,10 @@ def clipping_col(df_in: pd.DataFrame, str_col: str, min_val: float, max_val: flo
     """
     df_out = df_in.copy()
 
-    df_out.loc[df_out[str_col] < min_val, str_col] = min_val
-    df_out.loc[df_out[str_col] > max_val, str_col] = max_val
+    if min_val!=None:
+        df_out.loc[df_out[str_col] < min_val, str_col] = min_val
+    if max_val!=None:
+        df_out.loc[df_out[str_col] > max_val, str_col] = max_val
 
     return df_out
 
@@ -457,6 +459,27 @@ def load_scaler(filename: str) -> StandardScaler:
         scaler = pickle.load(f)
     return scaler
 
+def round_to_significant_digits(df : pd.DataFrame, digits : int,
+                                list_col_int:list=None, list_col_ignore:list=None)-> pd.DataFrame :
+    """Round the values of a dataframe to a number of significant digits
+
+    Args:
+        df (pd.DataFrame): The dataframe to round
+        digits (int): The number of significant digits
+        list_col_int (list): The list of columns to round to digits-2
+        list_col_ignore (list): The list of columns to ignore
+
+    Returns:
+        pd.DataFrame: The rounded dataframe
+    """
+    df_temp=df.copy()
+    for col in df_temp.columns:
+        if col not in list_col_ignore and pd.api.types.is_numeric_dtype(df_temp[col]):
+            if col in list_col_int:
+                df_temp[col]=df_temp[col].apply(lambda x:round(x,digits-2))
+            else:
+                df_temp[col]=df_temp[col].apply(lambda x:round(x,digits))
+    return df_temp
 
 if __name__ == "__main__":
     nb_groups = 20

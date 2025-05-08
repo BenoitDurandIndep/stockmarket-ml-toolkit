@@ -9,7 +9,7 @@ PATH_LOGS =os.path.dirname(os.path.abspath(__file__))+'/logs/'
 
 
 class Position:
-    def __init__(self, asset_code: str, entry_price: float, quantity: int, avg_cost: float, stop_loss: float, order : str=BUY_ORDER):
+    def __init__(self, asset_code: str, entry_price: float, quantity: int, avg_cost: float, stop_loss: float, order : str=BUY_ORDER, comment: str = None):
         """
         Initialize a new Position.
 
@@ -28,9 +28,10 @@ class Position:
         self.avg_cost = avg_cost
         self.stop_loss = stop_loss
         self.last_price = entry_price
+        self.comment = comment
 
     def __str__(self):
-        return f'Position: asset_code={self.asset_code}, entry_price={self.entry_price}, quantity={self.quantity}, avg_cost={self.avg_cost}, stop_loss={self.stop_loss},last_price={self.last_price}'
+        return f'Position: asset_code={self.asset_code}, entry_price={self.entry_price}, quantity={self.quantity}, avg_cost={self.avg_cost}, stop_loss={self.stop_loss}, last_price={self.last_price}, comment={self.comment}'
 
 class Portfolio:
     def __init__(self, initial_cash : float =10000, max_positions : int =10, scale_up : bool=False, log_to_file: bool = False):
@@ -125,7 +126,8 @@ class Portfolio:
             self.history=pd.concat([self.history,pd.DataFrame({'date':dt_action,'cash':self.cash,'nb_positions':self.nb_positions,'value':self.value},index=[0])],ignore_index=True)
 
 
-    def buy(self, asset_code: str,dt_action:pd.Timestamp, quantity: int, price: float,sl:float,  commission: float = 0.0):
+    def buy(self, asset_code: str,dt_action:pd.Timestamp, quantity: int, price: float,sl:float,
+              commission: float = 0.0, message:str=''):
         """
         Buy stocks and add them to the portfolio.
 
@@ -136,6 +138,7 @@ class Portfolio:
             price: The price of the stocks.
             sl: The stop loss of the asset.
             commission: The commission for the transaction in percent.
+            message: A message to log. Default ''.
         """
 
         if quantity <= 0 or price <= 0:
@@ -158,7 +161,7 @@ class Portfolio:
                 self.positions[asset_code].avg_cost=tmp_avg_cost/self.positions[asset_code].quantity
                 self.nb_trades += 1
                 self.total_commission += val_commission
-                self.log(dt_action,f'Scale up {quantity} of {asset_code}, cost: {cost}, remaining cash: {self.cash}',level=logging.INFO)
+                self.log(dt_action,f'Scale up {quantity} of {asset_code}, cost: {round(cost,2)}, remaining cash: {round(self.cash,2)} {message}',level=logging.INFO)
             else :
                 self.log(dt_action,f'No scale up and {asset_code} already in positions. Not buying.',level=logging.WARNING)
         else:
@@ -169,7 +172,7 @@ class Portfolio:
             self.nb_positions += 1
             self.nb_trades += 1
             self.total_commission += val_commission
-            self.log(dt_action,f'Bought {quantity} of {asset_code}, cost: {cost}, remaining cash: {self.cash}',level=logging.INFO)
+            self.log(dt_action,f'Bought {quantity} of {asset_code}, cost: {round(cost,2)}, remaining cash: {round(self.cash,2)} {message}',level=logging.INFO)
 
 
 
@@ -195,7 +198,7 @@ class Portfolio:
             self.nb_positions -= 1 
             self.nb_trades += 1
             self.total_commission += val_commission
-            self.log(dt_action,f'Sold {message} {nb_stocks} of {asset_code}, revenue: {revenue}, remaining cash: {self.cash}',level=logging.INFO)
+            self.log(dt_action,f'Sold {nb_stocks} of {asset_code}, revenue: {round(revenue,2)}, remaining cash: {round(self.cash,2)} {message}',level=logging.INFO)
 
 
     # def sell_stop_loss(self,dt_action:pd.Timestamp, price: float, commission: float = 0.0):
@@ -245,10 +248,10 @@ def backtest_exit_strategy(df_in:pd.DataFrame, portfolio:Portfolio, dt:pd.Timest
             continue
         # if the stop loss of a position is below the low of the asset, sell the stock
         if pos.stop_loss >= df_in.loc[(dt, asset_code)]['low']:
-            portfolio.sell(asset_code=asset_code,dt_action=dt, price=df_in.loc[(dt, asset_code)]['low'], commission=commission, message='SL')
+            portfolio.sell(asset_code=asset_code,dt_action=dt, price=df_in.loc[(dt, asset_code)]['low'], commission=commission, message=f"SL {df_in.loc[(dt, asset_code)]['comment']}")
         else: # if a position is in the portfolio, sell it if the exit signal is True
             if df_in.loc[(dt, asset_code)]['exit']:
-                portfolio.sell(asset_code=asset_code,dt_action=dt, price=df_in.loc[(dt, asset_code)]['price'], commission=commission)
+                portfolio.sell(asset_code=asset_code,dt_action=dt, price=df_in.loc[(dt, asset_code)]['price'], commission=commission, message=f"{df_in.loc[(dt, asset_code)]['comment']}")
             else: #update last_price
                 if df_in.loc[(dt, asset_code)]['price']>0:
                     pos.last_price = df_in.loc[(dt, asset_code)]['price'] 
@@ -256,7 +259,8 @@ def backtest_exit_strategy(df_in:pd.DataFrame, portfolio:Portfolio, dt:pd.Timest
 
     return portfolio
 
-def backtest_entry_strategy(df_in:pd.DataFrame, portfolio:Portfolio, dt:pd.Timestamp, commission:float=0.0, fixe_quantity:bool=True) ->Portfolio:
+def backtest_entry_strategy(df_in:pd.DataFrame, portfolio:Portfolio, dt:pd.Timestamp, commission:float=0.0,
+                             fixe_quantity:bool=True) ->Portfolio:
     """
     Backtests an entry strategy using the given DataFrame and portfolio.
 
@@ -279,7 +283,7 @@ def backtest_entry_strategy(df_in:pd.DataFrame, portfolio:Portfolio, dt:pd.Times
                 quantity=row['quantity']
             else:
                 quantity=np.floor(portfolio.cash/(portfolio.max_positions-portfolio.nb_positions)/row['price'])
-            portfolio.buy(asset_code=row.name[1],dt_action=dt, quantity=quantity, price=row['price'], sl=row['sl'], commission=commission)
+            portfolio.buy(asset_code=row.name[1],dt_action=dt, quantity=quantity, price=row['price'], sl=row['sl'], commission=commission, message=f"{row['comment']}")
 
     return portfolio
 
@@ -311,6 +315,14 @@ def backtest_strategy_portfolio(df_in:pd.DataFrame, initial_cash:float=10000.0, 
     sell_all=options.get('sell_all',False)
 
     df_sorted = df_in.sort_index()
+
+    # check if the DataFrame is empty
+    if df_sorted.empty:
+        raise ValueError("The input DataFrame is empty.")
+    
+    # Check if column comment exists and add a default column with None if not
+    if 'comment' not in df_sorted.columns:
+        df_sorted['comment'] = None
 
     portfolio = Portfolio(initial_cash=initial_cash, max_positions=max_positions, scale_up=scale_up, log_to_file=log_to_file)
     cnt_print=0
@@ -353,6 +365,7 @@ if __name__ == "__main__":
         'low': [95, 115, 105, 115, 145, 135,           45, 55, 70, 75, 90, 85],
         'sl': [90, 110, 100, 110, 140, 130,            40, 50, 65, 70, 85, 80],
         'priority': [1, 1, 1, 1, 1, 1,                  2, 2, 2, 2, 2, 2],
+        'comment': [None, None, '(comm 1)', None, None, '(comm 2)', '(comm 3)', '(comm 4)', None, None, None, None]
     }
     
     index = pd.MultiIndex.from_tuples([(pd.Timestamp('2024-01-02'), 'AAPL'), # BUY 
