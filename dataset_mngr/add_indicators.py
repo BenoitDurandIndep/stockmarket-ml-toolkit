@@ -157,6 +157,22 @@ def drop_indicators_not_selected(con: engine.Connection, df_in: pd.DataFrame, dt
 
     return df_clean
 
+def round_to_significant_digits(df_in: pd.DataFrame, digits: int = 4, list_min2:list=[]) -> pd.DataFrame:
+    """round the values of a dataframe to a number of significant digits
+    Args:
+        df_in (pd.DataFrame): Dataframe with column to round
+        digits (int, optional): number of significant digits. Defaults to 4.
+        list_min2 (list, optional): list of columns to round to digits-2. Defaults to [].
+    Returns:
+        pd.DataFrame: a copy of the input dataframe with rounded values
+    """
+    df_temp=df.copy()
+    for col in df_temp.columns:
+        if col in list_min2:
+            df_temp[col]=df_temp[col].apply(lambda x:round(x,digits-2))
+        else:
+            df_temp[col]=df_temp[col].apply(lambda x:round(x,digits))
+    return df_temp
 
 if __name__ == "__main__":
     code = "ta.trix(close=$$CLOSE$$,length=12)"
