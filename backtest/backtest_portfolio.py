@@ -9,7 +9,7 @@ PATH_LOGS =os.path.dirname(os.path.abspath(__file__))+'/logs/'
 
 
 class Position:
-    def __init__(self, asset_code: str, entry_price: float, quantity: int, avg_cost: float, stop_loss: float, order : str=BUY_ORDER, comment: str = None):
+    def __init__(self, asset_code: str, entry_price: float, quantity: int, avg_cost: float, stop_loss: float, order : str=BUY_ORDER, commission: float = 0.0, comment: str = None):
         """
         Initialize a new Position.
 
@@ -20,6 +20,8 @@ class Position:
             unit_cost: The unit cost of the asset.
             stop_loss: The stop loss of the asset.
             order: The order type (BUY or SELL).
+            commission: The commission for the transaction in percent.
+            comment: A comment for the position.
         """
         self.order = order
         self.asset_code = asset_code
@@ -29,6 +31,12 @@ class Position:
         self.stop_loss = stop_loss
         self.last_price = entry_price
         self.comment = comment
+        self.initial_stop_loss = stop_loss
+        self.initial_quantity = quantity
+        self.commission = commission
+        self.initial_risk = commission+(entry_price - stop_loss) * quantity
+        self.initial_risk_ratio = self.initial_risk / (commission+(entry_price * quantity)) if entry_price * quantity >0 else 0
+        
 
     def __str__(self):
         return f'Position: asset_code={self.asset_code}, entry_price={self.entry_price}, quantity={self.quantity}, avg_cost={self.avg_cost}, stop_loss={self.stop_loss}, last_price={self.last_price}, comment={self.comment}'
@@ -44,14 +52,31 @@ class Portfolio:
             scale_up: Whether to scale up the position if the asset is already in the portfolio.
             log_to_file: Whether to log to a file. If False, logs to the console.
         """
+        self.initial_cash = initial_cash
         self.positions = {}
         self.cash = initial_cash
         self.max_positions = max_positions
         self.scale_up = scale_up
         self.nb_positions = 0
         self.nb_trades = 0
+        self.nb_sells=0
+        self.nb_wins = 0
+        self.nb_losses = 0
+        self.win_streak = 0
+        self.loss_streak = 0
+        self.max_win_streak = 0
+        self.max_loss_streak = 0
         self.total_commission = 0
+        self.cum_gain = 0.0
+        self.cum_loss = 0.0
+        self.cum_risk = 0.0
+        self.avg_risk_reward_ratio_win = 0.0
+        self.avg_risk_reward_ratio_loss = 0.0
         self.value = initial_cash
+        self.trade_log = []  # List of dicts or DataFrame for trade details
+        self.metrics = {}    # Dict for summary metrics
+        self.file_path=None
+
 
         #history
         self.history = pd.DataFrame(columns=['date','cash','nb_positions','value'])
@@ -61,7 +86,8 @@ class Portfolio:
         self.logger.setLevel(logging.INFO)
 
         if log_to_file:
-            handler = logging.FileHandler(PATH_LOGS+'bt_portfolio_'+ datetime.now().strftime('%Y%m%d') +'.log',mode='w')
+            self.file_path = PATH_LOGS+'bt_portfolio_'+ datetime.now().strftime('%Y%m%d_%H%M%S') +'.log'
+            handler = logging.FileHandler(self.file_path,mode='w')
         else:
             handler = logging.StreamHandler()
 
@@ -108,6 +134,44 @@ class Portfolio:
         """
         pretty_positions = '\n'.join([f'{asset_code}: {pos.quantity} at {round(pos.avg_cost,2)}' for asset_code, pos in self.positions.items()])
         self.log(dt_action,f'Portfolio : cash={round(self.cash,2)}, nb_positions={self.nb_positions}, value={round(self.value,2)}, positions={pretty_positions}',level=logging.INFO)
+
+    def log_trade(self, trade_dict: dict):
+        """ Log a trade.
+        Args:
+            trade_dict (dict): The trade details to log.
+        """
+        self.trade_log.append(trade_dict)
+
+    def compute_metrics(self):
+        """ Compute the metrics of the portfolio.
+        """
+        # Example: compute final value, max drawdown, etc.
+        self.metrics['final_value'] = self.value
+        self.metrics['initial_cash'] = self.initial_cash
+        self.metrics['profit'] = self.value - self.initial_cash
+        self.metrics['return_pct'] = (self.value - self.initial_cash)*100 / self.initial_cash
+        self.metrics['max_drawdown_val'] = self.history['value'].cummax().sub(self.history['value']).max() #???
+        self.metrics['max_drawdown_pct'] = self.metrics['max_drawdown_val']*100 / self.history['value'].cummax().max() if self.history['value'].cummax().max()>0 else 0
+        self.metrics['nb_sells'] = self.nb_sells
+        self.metrics['nb_trades'] = self.nb_trades
+        self.metrics['total_commission'] = self.total_commission
+        self.metrics['nb_wins'] = self.nb_wins
+        self.metrics['nb_losses'] = self.nb_losses
+        self.metrics['max_win_streak'] = self.max_win_streak
+        self.metrics['max_loss_streak'] = self.max_loss_streak
+        self.metrics['win_rate'] = self.nb_wins / self.nb_sells if self.nb_sells > 0 else 0
+        # self.metrics['loss_rate'] = self.nb_losses / self.nb_sells if self.nb_sells > 0 else 0
+        self.metrics['sharpe_ratio'] = (self.history['value'].pct_change().mean() / self.history['value'].pct_change().std() * np.sqrt(252)) if self.history['value'].pct_change().std() != 0 else 0
+        self.metrics['calmar_ratio'] = self.metrics['return_pct'] / abs(self.metrics['max_drawdown_pct']) if self.metrics['max_drawdown_pct'] != 0 else 0
+        self.metrics['avg_trade_return'] = (self.value - self.initial_cash) / self.nb_sells if self.nb_sells > 0 else 0
+        self.metrics['profit_factor'] = self.cum_gain / self.cum_loss if self.cum_loss != 0 else 0
+        self.metrics['avg_gain'] = (self.cum_gain ) / self.nb_sells if self.nb_sells > 0 else 0
+        self.metrics['avg_risk'] = (self.cum_risk ) / self.nb_sells if self.nb_sells > 0 else 0
+        self.metrics['risk_reward_win'] = self.avg_risk_reward_ratio_win
+        self.metrics['risk_reward_loss'] = self.avg_risk_reward_ratio_loss
+
+        # print('Portfolio metrics OK')
+
 
     def update_value(self,dt_action:pd.Timestamp):
         """ Update the value of the portfolio.
@@ -162,19 +226,44 @@ class Portfolio:
                 self.nb_trades += 1
                 self.total_commission += val_commission
                 self.log(dt_action,f'Scale up {quantity} of {asset_code}, cost: {round(cost,2)}, remaining cash: {round(self.cash,2)} {message}',level=logging.INFO)
+                self.log_trade({
+                    'date': dt_action,
+                    'action': 'buy',
+                    'asset_code': asset_code,
+                    'quantity': quantity,
+                    'price': price,
+                    'sl': sl,
+                    'cost': round(cost,2),
+                    'avg_cost': self.positions[asset_code].avg_cost,
+                    'commission': round(val_commission,2),
+                    'message': message
+                })
             else :
                 self.log(dt_action,f'No scale up and {asset_code} already in positions. Not buying.',level=logging.WARNING)
         else:
 
-            position = Position(order=BUY_ORDER,asset_code=asset_code, entry_price=price, quantity=quantity, avg_cost=cost/quantity, stop_loss=sl)  
+            position = Position(order=BUY_ORDER,asset_code=asset_code, entry_price=price, quantity=quantity, avg_cost=cost/quantity, stop_loss=sl, commission=commission)  
             self.positions[asset_code] = position
             self.cash -= cost
             self.nb_positions += 1
             self.nb_trades += 1
             self.total_commission += val_commission
+            risk = (price - sl) * quantity
+            self.cum_risk += (price - sl) * quantity
             self.log(dt_action,f'Bought {quantity} of {asset_code}, cost: {round(cost,2)}, remaining cash: {round(self.cash,2)} {message}',level=logging.INFO)
-
-
+            self.log_trade({
+                'date': dt_action,
+                'action': 'buy',
+                'asset_code': asset_code,
+                'quantity': quantity,
+                'price': price,
+                'sl': sl,
+                'risk': round(risk,2),
+                'cost': round(cost,2),
+                'avg_cost': position.avg_cost,
+                'commission': round(val_commission,2),  
+                'message': message
+            })
 
     def sell(self, asset_code: str,dt_action:pd.Timestamp, price: float, commission: float = 0.0, message:str=''):
         """
@@ -193,13 +282,46 @@ class Portfolio:
             revenue = nb_stocks * price 
             val_commission = revenue * commission
             revenue -= val_commission
+            avg_revenue = revenue/nb_stocks
             self.cash += revenue
-            del self.positions[asset_code]
+            self.total_commission += val_commission
+            profit = revenue - (pos.avg_cost * nb_stocks)
+            risk_reward_ratio= (profit) / pos.initial_risk if pos.initial_risk !=0 else 0
             self.nb_positions -= 1 
             self.nb_trades += 1
-            self.total_commission += val_commission
-            self.log(dt_action,f'Sold {nb_stocks} of {asset_code}, revenue: {round(revenue,2)}, remaining cash: {round(self.cash,2)} {message}',level=logging.INFO)
+            self.nb_sells += 1
 
+
+            if profit > 0:
+                self.nb_wins += 1
+                self.win_streak += 1
+                self.loss_streak = 0
+                self.max_win_streak = max(self.max_win_streak, self.win_streak)
+                self.cum_gain += profit
+                self.avg_risk_reward_ratio_win = ((self.avg_risk_reward_ratio_win * (self.nb_wins-1)) + risk_reward_ratio) / (self.nb_wins)
+            else:
+                self.nb_losses += 1
+                self.loss_streak += 1
+                self.win_streak = 0
+                self.max_loss_streak = max(self.max_loss_streak, self.loss_streak)
+                self.cum_loss += -profit
+                self.avg_risk_reward_ratio_loss = ((self.avg_risk_reward_ratio_loss * (self.nb_losses-1)) + risk_reward_ratio) / (self.nb_losses)
+
+            # self.log(dt_action,f'{profit=} {risk_reward_ratio=} {self.avg_risk_reward_ratio_win=} {self.avg_risk_reward_ratio_loss=}',level=logging.INFO)
+            self.log(dt_action,f'Sold {nb_stocks} of {asset_code}, revenue: {round(revenue,2)}, remaining cash: {round(self.cash,2)}, RR {risk_reward_ratio} {message}',level=logging.INFO)
+            self.log_trade({
+                'date': dt_action,
+                'action': 'sell',
+                'asset_code': asset_code,
+                'quantity': nb_stocks,
+                'price': price,
+                'revenue': round(revenue,2),
+                'avg_revenue': round(avg_revenue,2),
+                'commission': round(val_commission, 2),
+                'message': message
+            })
+
+            del self.positions[asset_code]
 
     # def sell_stop_loss(self,dt_action:pd.Timestamp, price: float, commission: float = 0.0):
     #     """
@@ -348,6 +470,8 @@ def backtest_strategy_portfolio(df_in:pd.DataFrame, initial_cash:float=10000.0, 
         for asset_code in portfolio.positions.copy():
             portfolio.sell(asset_code=asset_code,dt_action=dt, price=df_group.loc[(dt, asset_code)]['price'], commission=commission, message=' LIQUIDATE')
 
+    portfolio.update_value(dt)
+    portfolio.compute_metrics()
     portfolio.close_logger()
 
     return portfolio
@@ -391,4 +515,5 @@ if __name__ == "__main__":
     remaining_portfolio = backtest_strategy_portfolio(df_in=df, initial_cash=initial_cash, commission=commission,options=options,freq_print=4,log_to_file=False)
     print(f'Remaining portfolio: {remaining_portfolio}')
     print(f'{remaining_portfolio.nb_trades= } {remaining_portfolio.total_commission= }')
+    print(remaining_portfolio.metrics)
     print(remaining_portfolio.history)

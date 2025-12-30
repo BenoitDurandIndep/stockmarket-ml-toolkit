@@ -1,11 +1,18 @@
+from decimal import ROUND_HALF_UP, Decimal
+import json
 import os
 import re
-from typing import Any, Dict, Optional, Type
+from typing import Any, Dict, Optional, Type, List, TYPE_CHECKING
+import numpy as np
 import pandas as pd
 from datetime import datetime as dt
 from sqlalchemy import create_engine, engine, text, exc, pool, func
 from sqlalchemy.orm import Session, sessionmaker, Query
-from db_models import Base, Symbol, SymbolInfo
+from sqlalchemy.exc import SQLAlchemyError
+from db_models import Base, Campaign, Symbol, SymbolInfo, CombiModels, BtResult
+
+if TYPE_CHECKING:
+    from backtest.backtest_preparation import Strategy
 
 """ List of functions to import/export data from sqlite db
 """
@@ -533,6 +540,229 @@ def get_header_for_model(con: engine.Connection, model_name: str) -> str:
         f"""SELECT distinct md.HEADER_DTS  FROM model md WHERE md.NAME='{model_name}' LIMIT 1""")
     df = pd.read_sql_query(query, con)
     return df["HEADER_DTS"][0]
+
+
+def insert_object(session: Session, orm_class: Type[Base], obj: Any) -> Base:
+    """
+    Insert an object into the DB using its ORM class.
+
+    Args:
+        session (Session): SQLAlchemy session.
+        orm_class (Type[Base]): The ORM class corresponding to the table.
+        obj (Any): The object to insert. May be:
+            - an instance of orm_class (will be added as-is),
+            - a dict of column names -> values,
+            - an object exposing a to_dict() method,
+            - or any plain object (public attributes will be used).
+
+    Returns:
+        Base: The inserted ORM instance (refreshed).
+
+    Raises:
+        SQLAlchemyError: If the insert/commit fails (the session will be rolled back).
+        TypeError: If data cannot be converted to the ORM constructor args.
+    """
+    # prepare data / instance
+    if isinstance(obj, orm_class):
+        instance = obj
+    else:
+        if isinstance(obj, dict):
+            data = obj
+        elif hasattr(obj, "to_dict"):
+            data = obj.to_dict()
+        else:
+            data = {k: v for k, v in vars(obj).items() if not k.startswith("_") and not callable(v)}
+        instance = orm_class(**data)
+
+    try:
+        session.add(instance)
+        session.commit()
+        session.refresh(instance)
+        return instance
+    except SQLAlchemyError:
+        session.rollback()
+        raise
+
+
+def insert_link(session: Session, orm_class: Type[Base], key_values: Dict[str, Any]) -> Base:
+    """
+    Idempotently insert a row into a simple join/link table.
+
+    Args:
+        session (Session): SQLAlchemy session.
+        orm_class (Type[Base]): Join-table ORM class (e.g. CombiModels).
+        key_values (Dict[str, Any]): Mapping of ORM attribute/column names to values used
+            to check for an existing link (e.g. {'sk_strategy': 1, 'sk_model': 2}).
+
+    Returns:
+        Base: The existing or newly created ORM instance.
+
+    Raises:
+        ValueError: If key_values is empty.
+        SQLAlchemyError: If the insert/commit fails (the session will be rolled back).
+    """
+    if not key_values:
+        raise ValueError("key_values required")
+
+    # check existing link
+    existing = session.query(orm_class).filter_by(**key_values).first()
+    if existing:
+        return existing
+
+    entry = orm_class(**key_values)
+    try:
+        session.add(entry)
+        session.commit()
+        session.refresh(entry)
+        return entry
+    except SQLAlchemyError:
+        session.rollback()
+        raise
+
+def insert_combi(session: Session, strategy: "Strategy") -> List[CombiModels]:
+    """
+    Insert links (strategy <-> model) for all models of a Strategy object.
+
+    Args:
+        session (Session): SQLAlchemy session.
+        strategy (Strategy): Strategy object. Must have .id and .models (iterable of model objects).
+
+    Returns:
+        List[CombiModels]: List of existing or newly created CombiModels ORM instances.
+
+    Raises:
+        ValueError: If strategy or required ids are missing.
+        SQLAlchemyError: If DB insert/commit fails (session will be rolled back).
+    """
+    if strategy is None:
+        raise ValueError("strategy must be provided")
+
+    sk_strategy = getattr(strategy, "id", None) #or getattr(strategy, "sk_strategy", None)
+    if sk_strategy is None:
+        raise ValueError("strategy.id (sk_strategy) must be set on the Strategy object before calling insert_combi")
+
+    models = getattr(strategy, "models", None)
+    if not models:
+        raise ValueError("strategy.models must be a non-empty iterable of model objects")
+
+    created: List[CombiModels] = []
+    for m in models:
+        sk_model = getattr(m, "id", None) #or getattr(m, "sk_model", None)
+        if sk_model is None:
+            raise ValueError(f"Model in strategy.models is missing id/sk_model: {m!r}")
+
+        # insert_link is idempotent and handles existing links
+        entry = insert_link(session, CombiModels, {"sk_strategy": sk_strategy, "sk_model": sk_model})
+        created.append(entry)
+
+    return created
+
+_INT_FIELDS = {
+    "final_value", "profit", "initial_cash", "max_drawdown_val",
+    "nb_trades", "nb_sells", "nb_wins", "nb_losses", "nb_win_streak", "nb_loss_streak","avg_gain","avg_risk"
+}
+
+_FLOAT2_FIELDS = {
+    "total_commission", "return_pct", "max_drawdown_pct",
+    "sharpe_ratio", "calmar_ratio", "avg_trade_return", "win_rate","profit_factor","risk_reward_win","risk_reward_loss"
+}
+
+def _normalize_field(key: str, value, int_round=True,max_decimals: int = 5) -> Any:
+    """Normalize a single value for SQL insertion.
+    - convert pandas/numpy scalars -> python
+    - round floats to int for integer fields, else round floats to 2 decimals
+    - serialize lists/dicts to JSON
+
+    Args:
+        key (str): The field/column name (used to determine rounding).
+        int_round (bool): Whether to round integer fields to int.
+        max_decimals (int): Maximum number of decimal places for float rounding.
+    Returns:
+        Any: The normalized value.
+    """
+    if value is None:
+        return None
+
+    # pandas Timestamp -> ISO string (DB columns are text)
+    if isinstance(value, pd.Timestamp):
+        return value.strftime("%Y-%m-%d %H:%M:%S")
+
+    # numpy scalar -> python scalar
+    if isinstance(value, np.generic):
+        value = value.item()
+
+    # Decimal -> format or quantize
+    if isinstance(value, Decimal):
+        if key in _INT_FIELDS and int_round:
+            return int(value.quantize(Decimal('1'), rounding=ROUND_HALF_UP))
+        elif key in _FLOAT2_FIELDS:
+            return float(value.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP))
+        else:
+            return float(value.quantize(Decimal(f'1.{"0"*max_decimals}'), rounding=ROUND_HALF_UP))
+
+    # datetime -> ISO string
+    if isinstance(value, dt):
+        return value.strftime("%Y-%m-%d %H:%M:%S")
+
+    # floats -> round
+    if isinstance(value, float):
+        if key in _INT_FIELDS and int_round:
+            return int(round(value))
+        if key in _FLOAT2_FIELDS:
+            return round(value, 2)
+        # default: keep original float
+        return value
+
+    # ints/bools/str are fine
+    if isinstance(value, (int, bool, str)):
+        return value
+
+    # lists/tuples/dicts -> JSON string
+    if isinstance(value, (list, tuple, dict)):
+        try:
+            return json.dumps(value, default=str, separators=(",", ":"))
+        except Exception:
+            return str(value)
+
+    # fallback
+    return str(value)
+
+
+
+def insert_bt_result(session: Session, sk_symbol: int, sk_scenario: int,
+                     date_start:str, date_end:str, unit_time:str, log_file: str, extra: Optional[Dict[str, Any]] = None):
+    """
+    Insert a BT_RESULT row.
+
+    Args:
+        session (Session): SQLAlchemy session.
+        sk_symbol (int): campaign symbol primary key.
+        sk_scenario (int): scenario primary key.
+        date_start (str): start date of the backtest.
+        date_end (str): end date of the backtest.
+        unit_time (str): time unit of the backtest.
+        log_file (str): path to the log file.
+        extra (Optional[Dict]): any additional columns to include.
+
+    Returns:
+        The inserted BT_RESULT ORM instance (via insert_object) or raises on error.
+    """
+    data = { 
+        "sk_symbol": sk_symbol,
+        "sk_scenario": sk_scenario,
+        "date_start": date_start,
+        "date_end": date_end,
+        "unit_time": unit_time,
+        "log_filename": log_file, 
+    }
+    data["date_test"] = data.get("date_test") or dt.now()
+
+    if extra:
+        for k, v in extra.items():
+            key = k.lower()  # ensure lower-case attribute keys (db_models uses snake_case)
+            data[key] = _normalize_field(key, v)
+
+    return insert_object(session, BtResult, data)
 
 
 if __name__ == "__main__":
