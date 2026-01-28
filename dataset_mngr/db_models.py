@@ -70,11 +70,22 @@ class Model(Base):
     lib_proba_label: Mapped[Optional[str]] = mapped_column("LIB_PROBA_LABEL", String)
 
 
+class StrategyType(Base):
+    __tablename__ = "STRATEGY_TYPE"
+    sk_strategy_type: Mapped[int] = mapped_column("SK_STRATEGY_TYPE", Integer, primary_key=True, autoincrement=True)
+    name: Mapped[Optional[str]] = mapped_column("NAME", String)
+    description: Mapped[Optional[str]] = mapped_column("DESCRIPTION", String)
+    code_entry: Mapped[Optional[str]] = mapped_column("CODE_ENTRY", String)
+    code_exit: Mapped[Optional[str]] = mapped_column("CODE_EXIT", String)
+    param_entry: Mapped[Optional[str]] = mapped_column("PARAM_ENTRY", String)
+    param_exit: Mapped[Optional[str]] = mapped_column("PARAM_EXIT", String)
+
+
 class Strategy(Base):
     __tablename__ = "STRATEGY"
     sk_strategy: Mapped[int] = mapped_column("SK_STRATEGY", Integer, primary_key=True, autoincrement=True)
     name: Mapped[Optional[str]] = mapped_column("NAME", String(100))
-    strat_type: Mapped[Optional[str]] = mapped_column("STRAT_TYPE", String(100))
+    strat_type: Mapped[Optional[int]] = mapped_column("SK_STRATEGY_TYPE", Integer, ForeignKey("STRATEGY_TYPE.SK_STRATEGY_TYPE"))
     model_type: Mapped[Optional[str]] = mapped_column("MODEL_TYPE", String(100))
     description: Mapped[Optional[str]] = mapped_column("DESCRIPTION", String(255))
     settings: Mapped[Optional[str]] = mapped_column("SETTINGS", String, default="255")

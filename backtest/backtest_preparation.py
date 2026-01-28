@@ -1,11 +1,11 @@
 import hashlib
-from typing import List, Dict, Any, Callable
+from typing import List, Dict, Any, Callable, Optional
 import pandas as pd
 
 class Model:
     def __init__(self,id:int, name: str,type :str, label:str,label_base:str,predict_col:str, proba_col:str,
-                  filename:str, features: List[str]=None,
-                    sk_dataset: int = None, sk_label: int = None, sk_symbol: int = None):
+                  filename:str, features: Optional[List[str]]=None,
+                    sk_dataset: Optional[int] = None, sk_label: Optional[int] = None, sk_symbol: Optional[int] = None):
         """Initialize the Model.
 
         Args:
@@ -56,7 +56,17 @@ class Model:
         }
 
 class StrategyType:
-    def __init__(self, id: int, name: str, model_type: str, description: str):
+    def __init__(
+        self,
+        id: int,
+        name: str,
+        model_type: str,
+        description: str,
+        code_entry: Optional[str] = None,
+        code_exit: Optional[str] = None,
+        param_entry: Optional[str] = None,
+        param_exit: Optional[str] = None,
+    ):
         """Initialize the StrategyType.
 
         Args:
@@ -64,11 +74,19 @@ class StrategyType:
             name (str): The name of the strategy type.
             model_type (str): The type of model used in the strategy.
             description (str): A description of the strategy type.
+            code_entry (str, optional): The code for the entry condition. Defaults to None.
+            code_exit (str, optional): The code for the exit condition. Defaults to None.
+            param_entry (str, optional): The parameters for the entry condition. Defaults to None.
+            param_exit (str, optional): The parameters for the exit condition. Defaults to None.
         """
         self.id = id
         self.name = name
         self.model_type = model_type
         self.description = description
+        self.code_entry = code_entry
+        self.code_exit = code_exit
+        self.param_entry = param_entry
+        self.param_exit = param_exit
 
     def calculate_id(self, models: List[Model], num_strat: int=0, setting_id: int=0) -> int:
         """Calculate a calculated ID for a strategy.
@@ -129,7 +147,15 @@ class Strategy:
 
         # calculate the id, init the strategy and return it
     @classmethod
-    def create(cls, type: StrategyType, models: List[Model], num_strat: int = 0) -> "Strategy":
+    def create(
+        cls,
+        type: StrategyType,
+        models: List[Model],
+        entry_condition: Callable,
+        exit_condition: Callable,
+        settings: Dict[str, Any],
+        num_strat: int = 0,
+    ) -> "Strategy":
         """Create a Strategy instance with a calculated ID.
 
         Args:
@@ -141,7 +167,15 @@ class Strategy:
             Strategy: The created Strategy instance.
         """
         strat_id = type.calculate_id(models, num_strat)
-        return cls(id=strat_id, name=f"Strategy {strat_id}", type=type, models=models)
+        return cls(
+            id=strat_id,
+            name=f"Strategy {strat_id}",
+            type=type,
+            models=models,
+            entry_condition=entry_condition,
+            exit_condition=exit_condition,
+            settings=settings,
+        )
 
     def add_signals(self, df: pd.DataFrame, default_value: int=0,
                     sort_column: str="",sort_group_column: str="") -> pd.DataFrame:
@@ -161,7 +195,7 @@ class Strategy:
         df[f'exit_{self.suffix}'] = self.exit_condition(df,self.models,self.settings).fillna(default_value)
 
         if sort_column:
-            df['tmp_filter'] = df[sort_column].where(df[f'entry_{self.suffix}'] == 1, None)
+            df['tmp_filter'] = df[sort_column].where(df[f'entry_{self.suffix}'] == 1, 0.0)
             df[f'rank_{self.suffix}'] = df.groupby(sort_group_column)[sort_column].rank(ascending=False, method='first')
 
         df.drop(columns=['tmp_filter'], errors='ignore', inplace=True)
@@ -172,7 +206,7 @@ class Strategy:
 # class scenario : a strategy with a money management and options for backtesting
 class Scenario:
     def __init__(self, id: int, strategy: Strategy, stop_loss: str, # Callable, #pos_size: Callable,
-                  params: Dict[str, Any] = None):
+                  params: Optional[Dict[str, Any]] = None):
         """Initialize the Scenario.
 
         Args:
@@ -186,7 +220,6 @@ class Scenario:
         self.id = id
         self.strategy = strategy
         self.stop_loss = stop_loss
-        # self.pos_size = pos_size
         self.params = params or {}
         self.sk_campaign = None
         self.code= None
@@ -227,10 +260,13 @@ class Scenario:
         df_tmp.loc[:, f'sl_{self.strategy.suffix}'] = df_tmp[col] * (1 - sl)
         return df_tmp
 
+    def run(self, df: pd.DataFrame):
+        raise NotImplementedError("Scenario.run must be implemented by the caller")
+
 
 
 class Campaign:
-    def __init__(self, name: str, description: str, scenarii: List[Scenario], params: Dict[str, Any] = None):
+    def __init__(self, name: str, description: str, scenarii: List[Scenario], params: Optional[Dict[str, Any]] = None):
         """Initialize the Campaign.
 
         Args:
@@ -274,15 +310,35 @@ if __name__ == "__main__":
         return [0] * len(df)
 
     # Dummy entry/exit conditions
-    def entry_cond(df, models):
+    def entry_cond(df, models, settings):
         return df.index % 2 == 0
 
-    def exit_cond(df, models):
+    def exit_cond(df, models, settings):
         return df.index % 2 == 1
 
-    model1 = Model(name="DummyModel", predict_func=dummy_predict, features=[])
-    strat1 = Strategy(name="Strat1", models=[model1], entry_condition=entry_cond, exit_condition=exit_cond)
-    campaign = Campaign(name="TestCampaign", strategies=[strat1])
+    model1 = Model(
+        id=1,
+        name="DummyModel",
+        type="dummy",
+        label="label",
+        label_base="label_base",
+        predict_col="predict",
+        proba_col="proba",
+        filename="dummy_model.pkl",
+        features=[],
+    )
+    strat_type = StrategyType(id=1, name="DummyType", model_type="dummy", description="Dummy strategy type")
+    strat1 = Strategy(
+        id=1,
+        name="Strat1",
+        type=strat_type,
+        models=[model1],
+        entry_condition=entry_cond,
+        exit_condition=exit_cond,
+        settings={},
+    )
+    scenario1 = Scenario(id=1, strategy=strat1, stop_loss="fixed", params={})
+    campaign = Campaign(name="TestCampaign", description="Test campaign", scenarii=[scenario1])
 
     import pandas as pd
     df = pd.DataFrame({'A': range(10)})

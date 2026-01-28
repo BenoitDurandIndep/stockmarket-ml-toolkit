@@ -1,6 +1,6 @@
 import pandas as pd
 import talib
-import pandas_ta as ta
+from typing import Optional, List
 from sqlalchemy import engine
 from sqlalchemy.orm import sessionmaker
 from sqlite_io import get_connection, get_candles_to_df, get_ind_for_dts, get_ind_list_by_type_for_dts, get_ind_list_for_model,get_header_for_model
@@ -51,7 +51,7 @@ def get_indicator_value(df_in: pd.DataFrame, indic_code: str, sep: str = DEFAULT
     return filtered_df['ind_calculated']
 
 
-def add_indicators_to_df(con: engine.Connection, df_in: pd.DataFrame, dts_name: str, symbol: str = None) -> pd.DataFrame:
+def add_indicators_to_df(con: engine.Connection, df_in: pd.DataFrame, dts_name: str, symbol: Optional[str] = None) -> pd.DataFrame:
     """calculates indicators series for a dataframe et returns the dataframe completed
 
     Args:
@@ -64,13 +64,13 @@ def add_indicators_to_df(con: engine.Connection, df_in: pd.DataFrame, dts_name: 
         pd.DataFrame: completed dataframe with indicators
     """
     df_comp = df_in.copy()
-    if symbol==None:
-        symbol=df_comp['CODE'][0]
+    if symbol is None:
+        symbol = str(df_comp['CODE'][0])
     df_list_ind = get_ind_for_dts(
         con=con, dts_name=dts_name, symbol_code=symbol)
     for row in df_list_ind.itertuples(index=False):
         df_comp[row.LABEL] = get_indicator_value(
-            df_in=df_comp, indic_code=row.PY_CODE)
+            df_in=df_comp, indic_code=str(row.PY_CODE))
 
     return df_comp
 
@@ -117,7 +117,7 @@ def reorganize_columns(df: pd.DataFrame, column_order: str) -> pd.DataFrame:
         df = reorganize_columns(df, "col1,col3,col4,col2")
     """
     columns = [col.strip() for col in column_order.split(',')]
-    if df.index.name in columns:
+    if isinstance(df.index.name, str) and df.index.name in columns:
         columns.remove(df.index.name)
 
     return df[columns]
@@ -157,7 +157,7 @@ def drop_indicators_not_selected(con: engine.Connection, df_in: pd.DataFrame, dt
 
     return df_clean
 
-def round_to_significant_digits(df_in: pd.DataFrame, digits: int = 4, list_min2:list=[]) -> pd.DataFrame:
+def round_to_significant_digits(df_in: pd.DataFrame, digits: int = 4, list_min2: Optional[List[str]] = None) -> pd.DataFrame:
     """round the values of a dataframe to a number of significant digits
     Args:
         df_in (pd.DataFrame): Dataframe with column to round
@@ -166,7 +166,8 @@ def round_to_significant_digits(df_in: pd.DataFrame, digits: int = 4, list_min2:
     Returns:
         pd.DataFrame: a copy of the input dataframe with rounded values
     """
-    df_temp=df.copy()
+    df_temp = df_in.copy()
+    list_min2 = list_min2 or []
     for col in df_temp.columns:
         if col in list_min2:
             df_temp[col]=df_temp[col].apply(lambda x:round(x,digits-2))

@@ -3,13 +3,14 @@ import pandas as pd
 import logging
 import numpy as np
 from datetime import datetime
+from typing import Optional, Dict, Any
 
 BUY_ORDER='BUY'
 PATH_LOGS =os.path.dirname(os.path.abspath(__file__))+'/logs/'
 
 
 class Position:
-    def __init__(self, asset_code: str, entry_price: float, quantity: int, avg_cost: float, stop_loss: float, order : str=BUY_ORDER, commission: float = 0.0, comment: str = None):
+    def __init__(self, asset_code: str, entry_price: float, quantity: int, avg_cost: float, stop_loss: float, order : str=BUY_ORDER, commission: float = 0.0, comment: Optional[str] = None):
         """
         Initialize a new Position.
 
@@ -323,30 +324,62 @@ class Portfolio:
 
             del self.positions[asset_code]
 
-    # def sell_stop_loss(self,dt_action:pd.Timestamp, price: float, commission: float = 0.0):
-    #     """
-    #     Sell stocks that have reached the stop loss.
+def _to_timestamp(value: Any) -> pd.Timestamp:
+    if isinstance(value, tuple) and value:
+        return pd.Timestamp(value[0])
+    return pd.Timestamp(str(value))
 
-    #     Args:
-    #         dt_action: The date of the action.
-    #         price: The price of the stocks.
-    #         commission: The commission for the transaction.
-    #     """
-    #     for asset_code, pos in self.positions.items():
-    #         if price <= pos.stop_loss:
-    #             self.sell(asset_code,dt_action, price, commission)
 
-    def has_stock(self, asset_code:str) -> bool:
-        """
-        Check if the portfolio has a stock.
+def _get_row_for_asset(df: pd.DataFrame, dt: pd.Timestamp, asset_code: str) -> Optional[pd.Series]:
+    """Return row for (dt, asset_code) if MultiIndex, else by asset_code index."""
+    if isinstance(df.index, pd.MultiIndex):
+        key = (dt, asset_code)
+        if key in df.index:
+            row = df.loc[key]
+            if isinstance(row, pd.DataFrame):
+                return row.iloc[0]
+            if isinstance(row, pd.Series):
+                return row
+            return None
+        return None
+    if asset_code in df.index:
+        row = df.loc[asset_code]
+        if isinstance(row, pd.DataFrame):
+            return row.iloc[0]
+        if isinstance(row, pd.Series):
+            return row
+        return None
+    return None
 
-        Args :
-            asset_code (str): The code of the asset.
+def _normalize_options(options: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    return options or {}
 
-        Returns:
-            bool: True if the portfolio has the stock, False otherwise.
-        """
-        return asset_code in self.positions
+
+def _run_backtest_loop(df_sorted: pd.DataFrame, portfolio: Portfolio, commission: float,
+                       max_positions: int, fixe_quantity: bool, freq_print: int) -> tuple[Portfolio, pd.Timestamp, pd.DataFrame]:
+    cnt_print = 0
+    last_dt: Optional[pd.Timestamp] = None
+    last_group: Optional[pd.DataFrame] = None
+
+    for dt, df_group in df_sorted.groupby(level=0):
+        dt_value = _to_timestamp(dt)
+        last_dt = dt_value
+        last_group = df_group
+
+        portfolio = backtest_exit_strategy(df_group, portfolio, dt_value, commission)
+        if portfolio.nb_positions < max_positions:
+            portfolio = backtest_entry_strategy(df_group, portfolio, dt_value, commission, fixe_quantity)
+
+        portfolio.update_value(dt_value)
+        cnt_print += 1
+        if freq_print > 0 and cnt_print == freq_print:
+            portfolio.pretty_print_in_log(dt_value)
+            cnt_print = 0
+
+    if last_dt is None or last_group is None:
+        raise ValueError("The input DataFrame is empty.")
+
+    return portfolio, last_dt, last_group
 
 
 def backtest_exit_strategy(df_in:pd.DataFrame, portfolio:Portfolio, dt:pd.Timestamp, commission:float=0.0) ->Portfolio:
@@ -364,19 +397,25 @@ def backtest_exit_strategy(df_in:pd.DataFrame, portfolio:Portfolio, dt:pd.Timest
     """
     # iterate over the rows of the DataFrame and sell the stock if the exit signal is True
     for asset_code, pos in portfolio.positions.copy().items():
-        #check if the asset is in the dataframe
-        if (dt, asset_code) not in df_in.index:
-            portfolio.log(dt,f'Asset {asset_code} not in the dataframe',level=logging.ERROR)
+        row = _get_row_for_asset(df_in, dt, asset_code)
+        if row is None:
+            portfolio.log(dt, f'Asset {asset_code} not in the dataframe', level=logging.ERROR)
             continue
+
+        low = float(row.get('low', 0.0))
+        price = float(row.get('price', 0.0))
+        comment = row.get('comment', '')
+        exit_signal = bool(row.get('exit', False))
+
         # if the stop loss of a position is below the low of the asset, sell the stock
-        if pos.stop_loss >= df_in.loc[(dt, asset_code)]['low']:
-            portfolio.sell(asset_code=asset_code,dt_action=dt, price=df_in.loc[(dt, asset_code)]['low'], commission=commission, message=f"SL {df_in.loc[(dt, asset_code)]['comment']}")
-        else: # if a position is in the portfolio, sell it if the exit signal is True
-            if df_in.loc[(dt, asset_code)]['exit']:
-                portfolio.sell(asset_code=asset_code,dt_action=dt, price=df_in.loc[(dt, asset_code)]['price'], commission=commission, message=f"{df_in.loc[(dt, asset_code)]['comment']}")
-            else: #update last_price
-                if df_in.loc[(dt, asset_code)]['price']>0:
-                    pos.last_price = df_in.loc[(dt, asset_code)]['price'] 
+        if pos.stop_loss >= low:
+            portfolio.sell(asset_code=asset_code, dt_action=dt, price=low, commission=commission, message=f"SL {comment}")
+        else:  # if a position is in the portfolio, sell it if the exit signal is True
+            if exit_signal:
+                portfolio.sell(asset_code=asset_code, dt_action=dt, price=price, commission=commission, message=f"{comment}")
+            else:  # update last_price
+                if price > 0:
+                    pos.last_price = price
                     
 
     return portfolio
@@ -397,7 +436,7 @@ def backtest_entry_strategy(df_in:pd.DataFrame, portfolio:Portfolio, dt:pd.Times
         Portfolio: The portfolio object containing the remaining positions and cash.
     """
     # iterate over the rows of the DataFrame and buy the stock if the entry signal is True
-    for index, row in df_in[df_in['entry']].sort_values('priority').iterrows():
+    for _, row in df_in[df_in['entry']].sort_values('priority').iterrows():
         if portfolio.nb_positions >= portfolio.max_positions:
             break
         else:
@@ -405,11 +444,12 @@ def backtest_entry_strategy(df_in:pd.DataFrame, portfolio:Portfolio, dt:pd.Times
                 quantity=row['quantity']
             else:
                 quantity=np.floor(portfolio.cash/(portfolio.max_positions-portfolio.nb_positions)/row['price'])
-            portfolio.buy(asset_code=row.name[1],dt_action=dt, quantity=quantity, price=row['price'], sl=row['sl'], commission=commission, message=f"{row['comment']}")
+            asset_code = row.name[1] if isinstance(row.name, tuple) else row.name
+            portfolio.buy(asset_code=str(asset_code),dt_action=dt, quantity=quantity, price=row['price'], sl=row['sl'], commission=commission, message=f"{row['comment']}")
 
     return portfolio
 
-def backtest_strategy_portfolio(df_in:pd.DataFrame, initial_cash:float=10000.0, commission:float=0.0,options: dict = None, log_to_file:bool=False,freq_print:int=0) ->Portfolio:
+def backtest_strategy_portfolio(df_in:pd.DataFrame, initial_cash:float=10000.0, commission:float=0.0, options: Optional[Dict[str, Any]] = None, log_to_file:bool=False,freq_print:int=0) ->Portfolio:
     """
     Backtests a trading strategy using the given DataFrame and initial cash.
     df_in must have a MultiIndex with the date and asset_code as the index.
@@ -431,6 +471,7 @@ def backtest_strategy_portfolio(df_in:pd.DataFrame, initial_cash:float=10000.0, 
         Portfolio: The portfolio object containing the remaining positions and cash.
     """
 
+    options = _normalize_options(options)
     max_positions=options.get('max_positions',10)
     scale_up=options.get('scale_up',False)
     fixe_quantity=options.get('fixe_quantity',True)
@@ -447,30 +488,27 @@ def backtest_strategy_portfolio(df_in:pd.DataFrame, initial_cash:float=10000.0, 
         df_sorted['comment'] = None
 
     portfolio = Portfolio(initial_cash=initial_cash, max_positions=max_positions, scale_up=scale_up, log_to_file=log_to_file)
-    cnt_print=0
 
-    # iterate over the date index[0] of the DataFrame and get a dataframe of the rows for this date   
-    for dt, df_group in df_sorted.groupby(level=0):
-        
-        portfolio = backtest_exit_strategy(df_group, portfolio, dt, commission)
-
-        # if max positions is not reached
-        if portfolio.nb_positions < max_positions:
-            portfolio = backtest_entry_strategy(df_group, portfolio, dt, commission,fixe_quantity)
-
-        portfolio.update_value(dt)
-
-        cnt_print+=1
-        if freq_print>0 and cnt_print==freq_print:
-            portfolio.pretty_print_in_log(dt)
-            cnt_print=0
+    portfolio, last_dt, last_group = _run_backtest_loop(
+        df_sorted=df_sorted,
+        portfolio=portfolio,
+        commission=commission,
+        max_positions=max_positions,
+        fixe_quantity=fixe_quantity,
+        freq_print=freq_print,
+    )
 
     # sell all remaining positions
     if sell_all:
         for asset_code in portfolio.positions.copy():
-            portfolio.sell(asset_code=asset_code,dt_action=dt, price=df_group.loc[(dt, asset_code)]['price'], commission=commission, message=' LIQUIDATE')
+            row = _get_row_for_asset(last_group, last_dt, asset_code)
+            if row is None:
+                continue
+            price = float(row.get('price', 0.0))
+            if price > 0:
+                portfolio.sell(asset_code=asset_code,dt_action=last_dt, price=price, commission=commission, message=' LIQUIDATE')
 
-    portfolio.update_value(dt)
+    portfolio.update_value(last_dt)
     portfolio.compute_metrics()
     portfolio.close_logger()
 

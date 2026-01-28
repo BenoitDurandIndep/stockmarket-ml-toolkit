@@ -1,9 +1,11 @@
 import os
 import re
-from decouple import AutoConfig
+from typing import Optional
+
 import pandas as pd
 from datetime import datetime as dt
-from sqlalchemy import create_engine, engine, text, exc,pool
+from sqlalchemy import create_engine, engine, text, exc, pool
+from sqlalchemy.engine import Connection, CursorResult
 
 """ List of functions to import/export data from maria db
 """
@@ -20,12 +22,19 @@ def get_conf(name: str, file_name: str = ".env") -> str:
         str: the value as a string
     """
     dir_path = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
-    config = AutoConfig(search_path=os.path.join(dir_path, file_name))
+    try:
+        from decouple import AutoConfig  # type: ignore
+    except ImportError:
+        value = os.getenv(name)
+        if value is None:
+            raise RuntimeError("decouple is not installed and env var is missing: " + name)
+        return value
 
+    config = AutoConfig(search_path=os.path.join(dir_path, file_name))
     return config(name, cast=str)
 
 
-def get_connection() -> engine.Connection:
+def get_connection() -> Connection:
     """ Create a new Connection instance to the marketdataenrich database
     Connection infos must be set in a .env file readable by decouple
     hard set port at 3306
@@ -43,21 +52,21 @@ def get_connection() -> engine.Connection:
     return create_engine(conn_str, poolclass=pool.NullPool).connect()
 
 
-def close_connection(con: engine.Connection):
+def close_connection(con: Connection):
     """Close the connection pool
 
     Args:
         con (engine.Connection): SQLAlchemy connection to the DB
     """
     try:
-        con.execute("SELECT 1") #HINT TO AVOID THE BIG STACK
+        con.execute(text("SELECT 1")) #HINT TO AVOID THE BIG STACK
         con.close()
         con.engine.dispose()
     except (Exception,exc.SQLAlchemyError,exc.DBAPIError) as e :
         print(f"Exception while closing {e}")
 
 
-def get_symbol_info(con: engine.Connection, symbol: str) -> pd.DataFrame:
+def get_symbol_info(con: Connection, symbol: str) -> pd.DataFrame:
     """returns data of the table SYMBOL for the symbol code
 
     Args:
@@ -72,7 +81,7 @@ def get_symbol_info(con: engine.Connection, symbol: str) -> pd.DataFrame:
     return pd.read_sql_query(query, con, index_col='SK_SYMBOL')
 
 
-def load_yahoo_df_into_sql(con: engine.Connection, df_yahoo: pd.DataFrame, symbol: str, timeframe: int, del_duplicate: bool = False) -> int:
+def load_yahoo_df_into_sql(con: Connection, df_yahoo: pd.DataFrame, symbol: str, timeframe: int, del_duplicate: bool = False) -> Optional[int]:
     """load a dataframe of yahoo data into the CANDLE table in DB with insert mode
 
     Args:
@@ -113,7 +122,7 @@ def load_yahoo_df_into_sql(con: engine.Connection, df_yahoo: pd.DataFrame, symbo
     return res_ins
 
 
-def get_last_candle_date(con: engine.Connection, symbol: str, timeframe: int = 1440) -> pd.Timestamp:
+def get_last_candle_date(con: Connection, symbol: str, timeframe: int = 1440) -> pd.Timestamp:
     """ return the date of the last candle for this symbol and timeframe
 
     Args:
@@ -131,7 +140,7 @@ def get_last_candle_date(con: engine.Connection, symbol: str, timeframe: int = 1
     return df["LAST_DATE"][0]
 
 
-def get_candles_to_df(con: engine.Connection, symbol: str, timeframe: int = 1440, only_close: bool = False, date_start= None, date_end= None) -> pd.DataFrame:
+def get_candles_to_df(con: Connection, symbol: str, timeframe: int = 1440, only_close: bool = False, date_start= None, date_end= None) -> pd.DataFrame:
     """ select candles from DB to create a dataframe
 
     Args:
@@ -162,7 +171,7 @@ def get_candles_to_df(con: engine.Connection, symbol: str, timeframe: int = 1440
     else:
         objects += "OPEN,HIGH,LOW,CLOSE,ADJ_CLOSE,VOLUME"
 
-    pattern_date = re.compile("\d{4}-\d{2}-\d{2}")
+    pattern_date = re.compile(r"\d{4}-\d{2}-\d{2}")
     cond_date = ""
     if date_start is not None and len(date_start) > 0:
         if pattern_date.match(date_start) is not None:
@@ -182,7 +191,7 @@ def get_candles_to_df(con: engine.Connection, symbol: str, timeframe: int = 1440
     return pd.read_sql_query(query, con, index_col='OPEN_DATETIME')
 
 
-def delete_candles_symbol(con: engine.Connection, symbol: str) -> engine.cursor:
+def delete_candles_symbol(con: Connection, symbol: str) -> CursorResult:
     """ Delete candles lines for the symbol in the DB
 
     Args:
@@ -197,7 +206,7 @@ def delete_candles_symbol(con: engine.Connection, symbol: str) -> engine.cursor:
     return con.execute(del_st)
 
 
-def check_candles_last_months(con: engine.Connection, symbol: str, timeframe: int = 1440) -> pd.DataFrame:
+def check_candles_last_months(con: Connection, symbol: str, timeframe: int = 1440) -> pd.DataFrame:
     """ Return info about cnadles for a given symbol and timeframe
     Data returned : the month YYYY-MM, nb candles, min(date),max(date),min(close),max(close)
 
@@ -219,7 +228,7 @@ def check_candles_last_months(con: engine.Connection, symbol: str, timeframe: in
     return pd.read_sql_query(query, con, index_col='MONTH')
 
 
-def get_ind_for_dts(con: engine.Connection, dts_name: str, symbol: str) -> pd.DataFrame:
+def get_ind_for_dts(con: Connection, dts_name: str, symbol: str) -> pd.DataFrame:
     """ returns the indicators data in a dataframe for a given dataset and a symbol
 
     Args:
@@ -240,7 +249,7 @@ def get_ind_for_dts(con: engine.Connection, dts_name: str, symbol: str) -> pd.Da
     return pd.read_sql_query(query, con)
 
 
-def get_ind_list_by_type_for_dts(con: engine.Connection, dts_name: str, symbol: str, ind_type: int = 0) -> pd.DataFrame:
+def get_ind_list_by_type_for_dts(con: Connection, dts_name: str, symbol: str, ind_type: int = 0) -> pd.DataFrame:
     """ returns the list of labels for indicators for a given dataset, a symbol  and an indicator type
 
     Args:
@@ -260,7 +269,7 @@ def get_ind_list_by_type_for_dts(con: engine.Connection, dts_name: str, symbol: 
     return pd.read_sql_query(query, con)
 
 
-def get_ind_list_for_model(con: engine.Connection, model_name: str) -> pd.DataFrame:
+def get_ind_list_for_model(con: Connection, model_name: str) -> pd.DataFrame:
     """ returns the list of labels for filtered indicators for a given model
 
     Args:
@@ -277,7 +286,7 @@ def get_ind_list_for_model(con: engine.Connection, model_name: str) -> pd.DataFr
     return pd.read_sql_query(query, con)
 
 
-def get_header_for_model(con: engine.Connection, model_name: str) -> str:
+def get_header_for_model(con: Connection, model_name: str) -> str:
     """ returns the list of features ordered for a given model
 
     Args:

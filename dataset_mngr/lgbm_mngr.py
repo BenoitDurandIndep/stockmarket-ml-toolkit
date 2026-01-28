@@ -1,9 +1,13 @@
 import numpy as np
 import pandas as pd
 import lightgbm as lgb
+from typing import Iterable, Optional, Sequence, Tuple, Union
 
 
-def lgbm_custom_penalty_score(y_true :lgb.Dataset, y_pred: lgb.Dataset) -> tuple:
+def lgbm_custom_penalty_score(
+    y_true: Union[lgb.Dataset, np.ndarray],
+    y_pred: np.ndarray,
+) -> Tuple[str, float, bool]:
     """
     Custom penalty function for LightGBM to calculate the mean squared error between true and predicted labels.
     This function is used as a custom evaluation metric during the training of LightGBM models.
@@ -14,28 +18,31 @@ def lgbm_custom_penalty_score(y_true :lgb.Dataset, y_pred: lgb.Dataset) -> tuple
         tuple: A tuple containing the name of the metric, the calculated error, and a boolean indicating if higher values are better.
     """
     # print(f"{y_true.shape=} {y_pred.shape=}")
-    if isinstance(y_true, lgb.Dataset):
-        y_true = y_true.get_label()
+    raw_true = y_true.get_label() if isinstance(y_true, lgb.Dataset) else y_true
+    y_true_arr = np.asarray(raw_true)
     # Convert predicted probabilities to class labels
     if y_pred.ndim == 1:
         y_pred_labels = y_pred
-    else :
+    else:
         y_pred_labels = np.argmax(y_pred, axis=1)  # Convert predicted probabilities to class labels
-    if y_true.shape[0] != y_pred_labels.shape[0]:
-        raise ValueError(f"Shape mismatch: y_true has shape {y_true.shape} but y_pred_labels has shape {y_pred_labels.shape}")
+    if y_true_arr.shape[0] != y_pred_labels.shape[0]:
+        raise ValueError(f"Shape mismatch: y_true has shape {y_true_arr.shape} but y_pred_labels has shape {y_pred_labels.shape}")
   
-    error = (y_true - y_pred_labels) ** 2
+    error = (y_true_arr - y_pred_labels) ** 2
     return 'custom_penalty', error.mean(), False  # Return the mean squared error (lower is better)
 
-def print_eval_metric(env: lgb.callback.CallbackEnv):
+def print_eval_metric(env: lgb.callback.CallbackEnv) -> None:
     """
     Custom callback function to print evaluation metrics during LightGBM training.
     Args:
         env (lgb.callback.CallbackEnv): The callback environment containing information about the training process.
     """
-    result = env.evaluation_result_list
+    result = env.evaluation_result_list or []
     for item in result:
-        metric_name, dataset_name, metric_value, _ = item
+        if len(item) == 4:
+            metric_name, dataset_name, metric_value, _ = item
+        else:
+            metric_name, dataset_name, metric_value, _, _ = item
         print(f"Iteration {env.iteration}: {dataset_name} - {metric_name} = {metric_value}")
 
 def calculate_tree_depth(tree: dict) -> int:
@@ -105,8 +112,11 @@ if __name__ == "__main__":
     print(f"Tree depth: {depth}")
 
     # Dummy values for required arguments
-    model = None
-    params = {}
+    X_train = np.array([[0.0], [1.0], [2.0], [3.0]])
+    y_train = np.array([0, 1, 0, 1])
+    train_data = lgb.Dataset(X_train, label=y_train)
+    params = {"objective": "binary", "verbosity": -1}
+    model = lgb.train(params, train_data, num_boost_round=1)
     iteration = 10
     begin_iteration = 0
     end_iteration = 100

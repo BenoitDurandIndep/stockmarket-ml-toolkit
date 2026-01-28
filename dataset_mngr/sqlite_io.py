@@ -2,23 +2,26 @@ from decimal import ROUND_HALF_UP, Decimal
 import json
 import os
 import re
-from typing import Any, Dict, Optional, Type, List, TYPE_CHECKING
+from typing import Any, Dict, Optional, Type, List, TYPE_CHECKING, TypeVar
 import numpy as np
 import pandas as pd
 from datetime import datetime as dt
 from sqlalchemy import create_engine, engine, text, exc, pool, func
+from sqlalchemy.engine import Connection, CursorResult
 from sqlalchemy.orm import Session, sessionmaker, Query
 from sqlalchemy.exc import SQLAlchemyError
-from db_models import Base, Campaign, Symbol, SymbolInfo, CombiModels, BtResult
+from .db_models import Base, Campaign, Symbol, SymbolInfo, CombiModels, BtResult
 
 if TYPE_CHECKING:
     from backtest.backtest_preparation import Strategy
+
+T = TypeVar("T", bound=Base)
 
 """ List of functions to import/export data from sqlite db
 """
 
 
-def get_connection(str_db_path: str = None) -> engine.Connection:
+def get_connection(str_db_path: Optional[str] = None) -> Optional[Connection]:
     """ Create a new Connection instance to the marketdataenrich database
     Connection infos must be set in a .env file readable by decouple
     hard set port at 3306
@@ -32,15 +35,15 @@ def get_connection(str_db_path: str = None) -> engine.Connection:
 
     if str_db_path == None:
         try:  # Try if we are in google colab or not
-            import google.colab
+            import google.colab  # type: ignore
             str_db_path = "/content/drive/MyDrive/COLAB/SQLITE_DB/dataset_market.db"
         except ImportError:
-            str_db_path = "C:\Projets\Data\sqlite\dataset_market.db"
+            str_db_path = r"D:\Projets\Data\sqlite\dataset_market.db"
 
     str_db_path = str_db_path.replace("\\", "\\\\")
     conn_str = f"sqlite:///{str_db_path}"
 
-    my_con = None
+    my_con: Optional[Connection] = None
     try:
         my_con = create_engine(conn_str, poolclass=pool.NullPool).connect()
     except (exc.SQLAlchemyError) as e:
@@ -49,21 +52,21 @@ def get_connection(str_db_path: str = None) -> engine.Connection:
     return my_con
 
 
-def close_connection(con: engine.Connection):
+def close_connection(con: Connection):
     """Close the connection pool
 
     Args:
         con (engine.Connection): SQLAlchemy connection to the DB
     """
     try:
-        con.execute("SELECT 1")  # HINT TO AVOID THE BIG STACK
+        con.execute(text("SELECT 1"))  # HINT TO AVOID THE BIG STACK
         con.close()
         con.engine.dispose()
     except (Exception, exc.SQLAlchemyError, exc.DBAPIError):
         pass
 
 
-def get_model(session: sessionmaker, model: Type[Base], filter_values: Dict[str, Optional[Any]] = None) -> Query:
+def get_model(session: Session, model: Type[Base], filter_values: Optional[Dict[str, Optional[Any]]] = None) -> List[Base]:
     """Get records in the database.
 
     Args:
@@ -75,10 +78,11 @@ def get_model(session: sessionmaker, model: Type[Base], filter_values: Dict[str,
         Query: SQLAlchemy query object with applied filters.
     """
 
+    filter_values = filter_values or {}
     return session.query(model).filter_by(**filter_values).all()
 
 
-def upsert_model(session: sessionmaker, model: Type[Base], primary_key_values: Dict[str, Optional[Any]] = None, **data) -> None:
+def upsert_model(session: Session, model: Type[Base], primary_key_values: Optional[Dict[str, Optional[Any]]] = None, **data) -> None:
     """Create or update a record in the database.
 
     Args:
@@ -102,7 +106,7 @@ def upsert_model(session: sessionmaker, model: Type[Base], primary_key_values: D
     session.commit()
 
 
-def get_symbol(session: Session, symbol_code: str) -> Symbol:
+def get_symbol(session: Session, symbol_code: str) -> Optional[Symbol]:
     """returns data of the table SYMBOL for the symbol code
 
     Args:
@@ -120,7 +124,7 @@ def get_symbol(session: Session, symbol_code: str) -> Symbol:
     return res
 
 
-def get_list_symbol(session: Session, filter_values: Dict[str, Optional[Any]] = None) -> Query:
+def get_list_symbol(session: Session, filter_values: Optional[Dict[str, Optional[Any]]] = None) -> List[Symbol]:
     """returns list of SYMBOL for the input filters
 
     Args:
@@ -131,14 +135,14 @@ def get_list_symbol(session: Session, filter_values: Dict[str, Optional[Any]] = 
         Query : The list of Symbol
     """
     try:
-      return session.query(Symbol).filter_by(**filter_values).order_by(Symbol.sk_symbol).all()
-
+        filter_values = filter_values or {}
+        return session.query(Symbol).filter_by(**filter_values).order_by(Symbol.sk_symbol).all()
     except exc.SQLAlchemyError as e:
         print(f"Error fetching symbol info for {filter_values}: {e}")
-        return None
+        return []
 
 
-def upsert_symbol(**data) -> Symbol:
+def upsert_symbol(**data) -> Optional[Symbol]:
     """Add a symbol in the sqlite database if it doesn't exist yet
 
     Args:
@@ -169,17 +173,27 @@ def upsert_symbol(**data) -> Symbol:
             session = my_session_maker()
             upsert_model(session=session, model=Symbol,
                          primary_key_values=primary_key_values, **data)
+            symbol = get_symbol(session=session, symbol_code=symbol_code)
             session.close()
-            close_connection(sym_con)
+            if sym_con is not None:
+                close_connection(sym_con)
         except (Exception, exc.SQLAlchemyError, exc.DBAPIError) as e:
-            raise exc.DatabaseError(f"Error upserting Symbol Info {data}: {e}")
-
-        symbol = get_symbol(symbol_code)
+            raise exc.DatabaseError(statement=f"Error upserting Symbol Info {data}", params=data, orig=e)
         if symbol == None:
             raise exc.DatabaseError(
-                statement=f"ERROR upserting Symbol {data} !", params=data, orig=exc.DatabaseError)
+                statement=f"ERROR upserting Symbol {data} !", params=data, orig=ValueError("Symbol not found after upsert"))
 
     return symbol
+
+
+def _resolve_sk_symbol(session: Session, data: Dict[str, Any]) -> int:
+    key_code, key_symbol = "code", "sk_symbol"
+    if key_symbol in data:
+        return data[key_symbol]
+    symbol = get_symbol(session=session, symbol_code=data[key_code])
+    if symbol is None:
+        raise ValueError(f"Symbol {data[key_code]} not found!")
+    return symbol.sk_symbol
 
 
 def upsert_symbol_info(session: Session, **data) -> bool:
@@ -203,36 +217,24 @@ def upsert_symbol_info(session: Session, **data) -> bool:
         raise ValueError(
             f"Params must include {key_code} or {key_symbol} and {key_info} {data=}!")
 
-    else:
-        if key_code in data and key_symbol not in data:  # need to get the SK
-            symbol = get_symbol(session=session, symbol_code=data[key_code])
-            if symbol == None:
-                raise ValueError(f"Symbol {data[key_code]} not found!")
-            else:
-                sk_symbol = symbol.sk_symbol
-        else:
-            sk_symbol = data[key_symbol]
-
-        try:
-            params = {
-                key_symbol: sk_symbol,
-                key_info: data[key_info],
-                'UPDATE_DATE': dt.now(),
-                'ACTIVE_ROW': 1
-            }
-
-            upsert_model(session=session, model=SymbolInfo, **params)
-
-            ret = True
-        except (Exception, exc.SQLAlchemyError, exc.DBAPIError) as e:
-            orig = e if hasattr(e, 'orig') else None
-            raise exc.DatabaseError(
-                statement=f"Error upserting Symbol Info {sk_symbol=}!", orig=orig, params=data)
+    try:
+        sk_symbol = _resolve_sk_symbol(session, data)
+        params = {
+            key_symbol: sk_symbol,
+            key_info: data[key_info],
+            "UPDATE_DATE": dt.now(),
+            "ACTIVE_ROW": 1,
+        }
+        upsert_model(session=session, model=SymbolInfo, **params)
+        ret = True
+    except (Exception, exc.SQLAlchemyError, exc.DBAPIError) as e:
+        raise exc.DatabaseError(
+            statement=f"Error upserting Symbol Info {sk_symbol=}!", orig=e, params=data)
 
     return ret
 
 
-def load_yahoo_df_into_sql(session: Session, con: engine.Connection, df_yahoo: pd.DataFrame, symbol_code: str = "XMULTI",  timeframe: int = 1440, del_duplicate: bool = False, target_table: str = "candle") -> int:
+def load_yahoo_df_into_sql(session: Session, con: Connection, df_yahoo: pd.DataFrame, symbol_code: str = "XMULTI",  timeframe: int = 1440, del_duplicate: bool = False, target_table: str = "candle") -> Optional[int]:
     """load a dataframe of yahoo data into the input target_table table in DB with insert mode
     if no symbol_code, the dataframe must include the SK_SYMBOL
 
@@ -284,7 +286,7 @@ def load_yahoo_df_into_sql(session: Session, con: engine.Connection, df_yahoo: p
     return res_ins
 
 
-def get_last_candle_date(session: Session, con: engine.Connection, symbol_code: str, timeframe: int = 1440) -> pd.Timestamp:
+def get_last_candle_date(session: Session, con: Connection, symbol_code: str, timeframe: int = 1440) -> pd.Timestamp:
     """ return the date of the last candle for this symbol and timeframe
 
     Args:
@@ -305,7 +307,7 @@ def get_last_candle_date(session: Session, con: engine.Connection, symbol_code: 
         raise ValueError(f"Symbol {symbol_code} is not known !")
 
     query = text(f"""SELECT MAX(OPEN_DATETIME) as LAST_DATE FROM CANDLE can
-    WHERE can.SK_SYMBOL={symbol.SK_SYMBOL} AND can.TIMEFRAME={timeframe}    """)
+    WHERE can.SK_SYMBOL={symbol.sk_symbol} AND can.TIMEFRAME={timeframe}    """)
     df = pd.read_sql_query(query, con)
     str_date = df["LAST_DATE"][0]
     dt_date = pd.to_datetime(str_date, format='%Y-%m-%d %H:%M:%S')
@@ -325,13 +327,13 @@ def check_date_get_candles(date=None):
     if isinstance(date, dt):
         return date.strftime("%Y-%m-%d")
     if len(date) > 0:
-        if re.match("\d{4}-\d{2}-\d{2}", date) is not None:
+        if re.match("\\d{4}-\\d{2}-\\d{2}", date) is not None:
             return date
         else:
             raise ValueError(f"date {date} must be YYYY-MM-DD")
     return None
 
-def get_candles_to_df(session: Session, con: engine.Connection, symbol_code: str = None, target_table: str = "CANDLE", timeframe: int = 1440,
+def get_candles_to_df(session: Session, con: Connection, symbol_code: Optional[str] = None, target_table: str = "CANDLE", timeframe: int = 1440,
                        only_close: bool = False,columns_name: str="OPEN,HIGH,LOW,CLOSE,VOLUME", tradable:bool = False, skip_cond:bool = False, date_start=None, date_end=None) -> pd.DataFrame:
     """ select candles from DB to create a dataframe
 
@@ -398,7 +400,7 @@ def get_candles_to_df(session: Session, con: engine.Connection, symbol_code: str
     return pd.read_sql_query(query, con, index_col=list_index_col)
 
 
-def delete_candles_symbol(con: engine.Connection, symbol_code: str) -> engine.cursor:
+def delete_candles_symbol(session: Session, con: Connection, symbol_code: str) -> CursorResult:
     """ Delete candles lines for the symbol in the DB
 
     Args:
@@ -412,16 +414,16 @@ def delete_candles_symbol(con: engine.Connection, symbol_code: str) -> engine.cu
         engine.cursor: a SQLAlchemy cursor
     """
 
-    symbol = get_symbol(symbol_code)
+    symbol = get_symbol(session=session, symbol_code=symbol_code)
     if symbol == None:
         raise ValueError(f"Symbol {symbol_code} is not known !")
 
     del_st = text(
-        f"DELETE FROM CANDLE WHERE SK_SYMBOL={symbol.SK_SYMBOL})")
+        f"DELETE FROM CANDLE WHERE SK_SYMBOL={symbol.sk_symbol}")
     return con.execute(del_st)
 
 
-def check_candles_last_months(con: engine.Connection, symbol_code: str, timeframe: int = 1440) -> pd.DataFrame:
+def check_candles_last_months(session: Session, con: Connection, symbol_code: str, timeframe: int = 1440) -> pd.DataFrame:
     """ Return info about cnadles for a given symbol and timeframe
     Data returned : the month YYYY-MM, nb candles, min(date),max(date),min(close),max(close)
 
@@ -437,13 +439,13 @@ def check_candles_last_months(con: engine.Connection, symbol_code: str, timefram
         pd.DataFrame: DF with the data
     """
 
-    symbol = get_symbol(symbol_code)
+    symbol = get_symbol(session=session, symbol_code=symbol_code)
     if symbol == None:
         raise ValueError(f"Symbol {symbol_code} is not known !")
 
     query = text(f""" SELECT  STRFTIME('%Y-%m',OPEN_DATETIME) AS MONTH ,COUNT(*) AS NB,
                 MIN(OPEN_DATETIME),MAX(OPEN_DATETIME),MIN(CLOSE),MAX(CLOSE)   FROM CANDLE 
-                WHERE SK_SYMBOL={symbol.SK_SYMBOL} AND TIMEFRAME={timeframe} 
+                WHERE SK_SYMBOL={symbol.sk_symbol} AND TIMEFRAME={timeframe} 
                 AND OPEN_DATETIME>DATE('now','start of month','-4 month')
                 GROUP BY 1 ORDER BY 1 DESC""")
     return pd.read_sql_query(query, con, index_col='MONTH')
@@ -542,7 +544,7 @@ def get_header_for_model(con: engine.Connection, model_name: str) -> str:
     return df["HEADER_DTS"][0]
 
 
-def insert_object(session: Session, orm_class: Type[Base], obj: Any) -> Base:
+def insert_object(session: Session, orm_class: Type[T], obj: Any) -> T:
     """
     Insert an object into the DB using its ORM class.
 
@@ -584,7 +586,7 @@ def insert_object(session: Session, orm_class: Type[Base], obj: Any) -> Base:
         raise
 
 
-def insert_link(session: Session, orm_class: Type[Base], key_values: Dict[str, Any]) -> Base:
+def insert_link(session: Session, orm_class: Type[T], key_values: Dict[str, Any]) -> T:
     """
     Idempotently insert a row into a simple join/link table.
 
@@ -667,7 +669,24 @@ _FLOAT2_FIELDS = {
     "sharpe_ratio", "calmar_ratio", "avg_trade_return", "win_rate","profit_factor","risk_reward_win","risk_reward_loss"
 }
 
-def _normalize_field(key: str, value, int_round=True,max_decimals: int = 5) -> Any:
+def _normalize_decimal(value: Decimal, key: str, int_round: bool, max_decimals: int) -> Any:
+    if key in _INT_FIELDS and int_round:
+        return int(value.quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+    if key in _FLOAT2_FIELDS:
+        return float(value.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
+    zeros = "0" * max_decimals
+    return float(value.quantize(Decimal(f"1.{zeros}"), rounding=ROUND_HALF_UP))
+
+
+def _normalize_float(value: float, key: str, int_round: bool) -> Any:
+    if key in _INT_FIELDS and int_round:
+        return int(round(value))
+    if key in _FLOAT2_FIELDS:
+        return round(value, 2)
+    return value
+
+
+def _normalize_field(key: str, value, int_round: bool = True, max_decimals: int = 5) -> Any:
     """Normalize a single value for SQL insertion.
     - convert pandas/numpy scalars -> python
     - round floats to int for integer fields, else round floats to 2 decimals
@@ -693,12 +712,7 @@ def _normalize_field(key: str, value, int_round=True,max_decimals: int = 5) -> A
 
     # Decimal -> format or quantize
     if isinstance(value, Decimal):
-        if key in _INT_FIELDS and int_round:
-            return int(value.quantize(Decimal('1'), rounding=ROUND_HALF_UP))
-        elif key in _FLOAT2_FIELDS:
-            return float(value.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP))
-        else:
-            return float(value.quantize(Decimal(f'1.{"0"*max_decimals}'), rounding=ROUND_HALF_UP))
+        return _normalize_decimal(value, key, int_round, max_decimals)
 
     # datetime -> ISO string
     if isinstance(value, dt):
@@ -706,12 +720,7 @@ def _normalize_field(key: str, value, int_round=True,max_decimals: int = 5) -> A
 
     # floats -> round
     if isinstance(value, float):
-        if key in _INT_FIELDS and int_round:
-            return int(round(value))
-        if key in _FLOAT2_FIELDS:
-            return round(value, 2)
-        # default: keep original float
-        return value
+        return _normalize_float(value, key, int_round)
 
     # ints/bools/str are fine
     if isinstance(value, (int, bool, str)):
@@ -771,37 +780,18 @@ if __name__ == "__main__":
     timeframe = 1440
     db_name = "dataset_market.db"
     candle_name = "candle_CW8.db"
-    con_CW8 = get_connection("C:\Projets\Data\sqlite\candle_CW8.db")
+    con_CW8 = get_connection(r"D:\Projets\Data\sqlite\candle_CW8.db")
 
     con_fwk = get_connection(
-        str_db_path="C:\Projets\Data\sqlite\dataset_market.db")
+        str_db_path=r"D:\Projets\Data\sqlite\dataset_market.db")
     my_session_maker = sessionmaker(bind=con_fwk)
     session = my_session_maker()
 
     sym = get_symbol(session=session, symbol_code=symbol)
-    # sym = create_symbol(symbol)
-
-    # sym2=upsert_symbol(CODE='ABC',NAME='TEST BDU T',TYPE='Stock',CURRENCY='USD')
-
+    if sym is None:
+        raise ValueError(f"Symbol {symbol} not found")
     print(f"SK du symbol {symbol} : {sym.sk_symbol} {sym.name=}")
+    if con_fwk is not None:
+        df_stocks = get_info_all_stock(con_fwk)
+        print(df_stocks.head())
 
-    # my_filter={'SK_SYMBOL':308}
-    # my_res=get_model(session=session,model=SymbolInfo,filter_values=my_filter)
-
-    # my_filter = {"active": 1, "region": "France", "type": "Stock"}
-    # my_res = get_list_symbol(session=session, filter_values=my_filter)
-    # # print(f"{my_res=}")
-    # for res in my_res:
-    #     print(f"{res.sk_symbol=}  {res.name=} ")
-    df_stocks=get_info_all_stock(con_fwk)
-    print(df_stocks.head())
-
-    # df_test = get_candles_to_df(session=session,
-    #     con=con_CW8,symbol_code='CW8', date_start=dt.strptime('2023-01-01', '%Y-%m-%d'))
-    # print(df_test.shape)
-
-    # last_date = get_last_candle_date(
-    #     con=con_CW8, symbol=symbol, timeframe=1440)
-    # print(f"my last_date {last_date}")
-
-    # print(check_candles_last_months(con_CW8, symbol, timeframe))

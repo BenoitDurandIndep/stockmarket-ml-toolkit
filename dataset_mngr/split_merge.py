@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 import random as rd
+from typing import Optional, List, Tuple
 from sklearn.model_selection import train_test_split
 
 ERROR_LABEL_EMPTY="df_label_list is empty !"
@@ -55,7 +56,7 @@ def add_split_dataset(df_in: pd.DataFrame, split_timeframe: str = "Q", split_pat
     return df_split
 
 
-def split_df_by_split_value(df_in: pd.DataFrame, column_name: str = "split_value", drop_column: bool = True) -> list:
+def split_df_by_split_value(df_in: pd.DataFrame, column_name: str = "split_value", drop_column: bool = True) -> List[pd.DataFrame]:
     """ split a df in 3 df (train, validation, confirmation) according a "split column"
     The values must be 0=train , 1=validation, 2=confirmation
 
@@ -72,7 +73,7 @@ def split_df_by_split_value(df_in: pd.DataFrame, column_name: str = "split_value
     """
     df_tmp = df_in.copy()
     nb_split = (df_tmp[column_name].max())+1
-    df_splitted = ["empty", ]*3 # force at 3 elements to avoid error
+    df_splitted: List[pd.DataFrame] = [pd.DataFrame()] * 3  # force at 3 elements to avoid error
 
     if column_name in df_in.columns:
         for i in range(0, nb_split):
@@ -102,7 +103,7 @@ def split_df_by_label(df_in: pd.DataFrame, list_label: list, prefix_key: str = "
     Returns:
         dict: a dictionnary containing one dataframe per label
     """
-    dict_ret = dict()
+    dict_ret = {}
     if len(list_label) > 0:
         for lab in list_label:
             df_tmp = df_in.copy()
@@ -139,7 +140,7 @@ def split_df_by_label_strat(df_in: pd.DataFrame, list_label: list, prefix_key: s
     Returns:
         dict: a dictionnary containing one dataframe per label per strat part, usually 9 dataframes 
     """
-    dict_final = dict()
+    dict_final = {}
     if len(list_label) > 0:
         df_tmp = df_in.copy()
         dict_df_label = split_df_by_label(
@@ -160,7 +161,7 @@ def split_df_by_label_strat(df_in: pd.DataFrame, list_label: list, prefix_key: s
     return dict_final
 
 
-def split_df_x_y(df_in: pd.DataFrame, str_label: str, list_features: list=None,  drop_na: bool = True) -> tuple:
+def split_df_x_y(df_in: pd.DataFrame, str_label: str, list_features: Optional[List[str]]=None,  drop_na: bool = True) -> tuple:
     """ split a dataframe into a features datafame and the label serie
 
     Args:
@@ -177,7 +178,7 @@ def split_df_x_y(df_in: pd.DataFrame, str_label: str, list_features: list=None, 
     if drop_na:
         df_tmp.dropna(inplace=True)
 
-    if list_features!=None:
+    if list_features is not None:
         if len(list_features)>0:
             x_cols = df_tmp[list_features]
         else:
@@ -251,7 +252,7 @@ def split_df_strat_lstm(df_in: pd.DataFrame, str_label: str, split_strat: tuple 
     return x_train_lstm, y_train_lstm, x_valid_lstm, y_valid_lstm, x_conf_lstm, y_test_lstm
 
 
-def prepare_sequences_df(df_in: pd.DataFrame, list_features: list, sequence_length: int = 10, str_new_col: str = "sequence", int_round: int =5) -> pd.DataFrame:
+def prepare_sequences_df(df_in: pd.DataFrame, list_features: List[str], sequence_length: int = 10, str_new_col: str = "sequence", int_round: int =5) -> pd.DataFrame:
     """
     Prepare sequences of features and labels for LSTM model.
     Args:
@@ -270,7 +271,7 @@ def prepare_sequences_df(df_in: pd.DataFrame, list_features: list, sequence_leng
         if idx < sequence_length - 1:
             return None
         else:
-            return np.round([df_out.loc[i, list_features].tolist() for i in range(idx - sequence_length + 1, idx + 1)],int_round)
+            return np.round([df_out.iloc[i][list_features].tolist() for i in range(idx - sequence_length + 1, idx + 1)],int_round)
         
     df_out = df_in.copy()
         
@@ -321,7 +322,7 @@ def prepare_sequences(np_x: np.ndarray, np_y: np.ndarray, sequence_length: int =
 
     return x_seq, y_seq
 
-def join_dataframes_backtest(df_candle: pd.DataFrame, df_score: pd.DataFrame, str_col_score: str, str_col_sl: str = None, str_col_tp: str = None, int_vol_def: int = 100000, fl_sl_def: float = None, fl_tp_def: float = None) -> pd.DataFrame:
+def join_dataframes_backtest(df_candle: pd.DataFrame, df_score: pd.DataFrame, str_col_score: str, str_col_sl: Optional[str] = None, str_col_tp: Optional[str] = None, int_vol_def: int = 100000, fl_sl_def: Optional[float] = None, fl_tp_def: Optional[float] = None) -> pd.DataFrame:
     """Join a dataframe with candles data and a dataframe with score pridction to return a dataframe ready for the backtrader part
 
     Args:

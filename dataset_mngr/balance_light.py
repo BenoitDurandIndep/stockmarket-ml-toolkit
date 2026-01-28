@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 import random as rd
-from typing import Dict
+from typing import Dict, Optional, Tuple
 import pickle
 from sklearn.preprocessing import PowerTransformer, StandardScaler, MinMaxScaler
 
@@ -13,7 +13,7 @@ from sklearn.preprocessing import PowerTransformer, StandardScaler, MinMaxScaler
 #########################################
 
 
-def log_transform_label(df_in: pd.DataFrame, str_label: str, fl_fix: float = 1e-6) -> pd.DataFrame | float:
+def log_transform_label(df_in: pd.DataFrame, str_label: str, fl_fix: float = 1e-6) -> Tuple[pd.DataFrame, float]:
     """logarithm transform the column str_label
 
     Args:
@@ -221,7 +221,7 @@ def reg_custom_undersampler_by_class(df_in: pd.DataFrame, str_label: str, nb_per
     return df_resampled
 
 
-def yeo_johnson_transform_col(df_in: pd.DataFrame, str_col: str) -> pd.DataFrame | PowerTransformer:
+def yeo_johnson_transform_col(df_in: pd.DataFrame, str_col: str) -> Tuple[pd.DataFrame, PowerTransformer]:
     """Transform a column of a dataframe with Yeo-Johnson
 
     Args:
@@ -233,8 +233,8 @@ def yeo_johnson_transform_col(df_in: pd.DataFrame, str_col: str) -> pd.DataFrame
     """
     df_out = df_in.copy()
     pt = PowerTransformer(method='yeo-johnson', standardize=False)
-    df_out[str_col] = pt.fit_transform(
-        df_out[str_col].values.reshape(-1, 1)).flatten()
+    values = df_out[str_col].to_numpy().reshape(-1, 1)
+    df_out[str_col] = pt.fit_transform(values).flatten()
     return df_out, pt
 
 
@@ -250,12 +250,12 @@ def yeo_johnson_transform_inverse_col(df_in: pd.DataFrame, str_col: str, pt: Pow
         pd.DataFrame: transformed dataframe
     """
     df_out = df_in.copy()
-    df_out[str_col] = pt.inverse_transform(
-        df_out[str_col].values.reshape(-1, 1)).flatten()
+    values = df_out[str_col].to_numpy().reshape(-1, 1)
+    df_out[str_col] = pt.inverse_transform(values).flatten()
     return df_out
 
 
-def normalize_df(df_in: pd.DataFrame, str_label: str=None,tuple_ft_range:tuple=(0,1)) -> pd.DataFrame | MinMaxScaler:
+def normalize_df(df_in: pd.DataFrame, str_label: Optional[str]=None,tuple_ft_range:tuple=(0,1)) -> Tuple[pd.DataFrame, MinMaxScaler]:
     """Normalize the features of a dataset with StandaedScaler
 
     Args:
@@ -314,7 +314,7 @@ def normalize_df_inverse(df_in: pd.DataFrame, str_label: str,scaler:MinMaxScaler
 
     return df_out
 
-def standardize_df(df_in: pd.DataFrame, str_label: str) -> pd.DataFrame | StandardScaler:
+def standardize_df(df_in: pd.DataFrame, str_label: str) -> Tuple[pd.DataFrame, StandardScaler]:
     """Standardize the features of a dataset with StandaedScaler
 
     Args:
@@ -388,11 +388,11 @@ if __name__ == "__main__":
     nb_val = 1000
     ut = "D"
 
-    open, close, label1, label2, label3 = rd.choices(range(10, 20), k=nb_val), rd.choices(
+    open_vals, close_vals, label1, label2, label3 = rd.choices(range(10, 20), k=nb_val), rd.choices(
         range(10, 20), k=nb_val), rd.choices(range(-100, 100), k=nb_val), rd.choices(range(0, 2), k=nb_val), rd.choices(range(0, 2), k=nb_val)
 
     idx = pd.date_range("2022-01-01", periods=nb_val, freq=ut)
-    frame = {'DATE': idx, 'OPEN': open, 'CLOSE': close,
+    frame = {'DATE': idx, 'OPEN': open_vals, 'CLOSE': close_vals,
              'LABEL_1': label1, 'LABEL_2': label2, 'LABEL_3': label3}
 
     df = pd.DataFrame(frame)

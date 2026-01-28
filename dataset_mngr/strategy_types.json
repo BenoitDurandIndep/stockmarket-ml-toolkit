@@ -1,0 +1,28 @@
+[
+  {
+    "name": "Threshold v1",
+    "description": "Single model threshold entry/exit",
+    "code_entry": "backtest.strategy_rules:entry_signal_threshold",
+    "code_exit": "backtest.strategy_rules:exit_signal_threshold",
+    "param_entry": {
+      "entry_threshold": 4
+    },
+    "param_exit": {
+      "exit_threshold": 0
+    }
+  },
+  {
+    "name": "Dual Threshold v1",
+    "description": "Two-model combined thresholds",
+    "code_entry": "backtest.strategy_rules:entry_signal_dual_threshold",
+    "code_exit": "backtest.strategy_rules:exit_signal_dual_threshold",
+    "param_entry": {
+      "entry_threshold": 4,
+      "entry_threshold_2": 4
+    },
+    "param_exit": {
+      "exit_threshold": 0,
+      "exit_threshold_2": 0
+    }
+  }
+]
