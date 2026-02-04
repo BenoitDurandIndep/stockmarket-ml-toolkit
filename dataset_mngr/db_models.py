@@ -86,9 +86,11 @@ class Strategy(Base):
     sk_strategy: Mapped[int] = mapped_column("SK_STRATEGY", Integer, primary_key=True, autoincrement=True)
     name: Mapped[Optional[str]] = mapped_column("NAME", String(100))
     strat_type: Mapped[Optional[int]] = mapped_column("SK_STRATEGY_TYPE", Integer, ForeignKey("STRATEGY_TYPE.SK_STRATEGY_TYPE"))
-    model_type: Mapped[Optional[str]] = mapped_column("MODEL_TYPE", String(100))
+    # model_type: Mapped[Optional[str]] = mapped_column("MODEL_TYPE", String(100))
     description: Mapped[Optional[str]] = mapped_column("DESCRIPTION", String(255))
-    settings: Mapped[Optional[str]] = mapped_column("SETTINGS", String, default="255")
+    #settings: Mapped[Optional[str]] = mapped_column("SETTINGS", String, default="255")
+    param_entry: Mapped[Optional[str]] = mapped_column("PARAM_ENTRY", String)
+    param_exit: Mapped[Optional[str]] = mapped_column("PARAM_EXIT", String)
 
 
 class Scenario(Base):
@@ -99,6 +101,7 @@ class Scenario(Base):
     settings: Mapped[Optional[str]] = mapped_column("SETTINGS", String(255))
     comment: Mapped[Optional[str]] = mapped_column("COMMENT", String(255))
     code: Mapped[Optional[str]] = mapped_column("CODE", String(25))
+    dt_insert: Mapped[Optional[datetime]] = mapped_column("DT_INSERT", DateTime, default=datetime.now)
 
 
 class CombiModels(Base):

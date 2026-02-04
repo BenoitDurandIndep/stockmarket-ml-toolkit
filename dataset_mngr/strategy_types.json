@@ -1,6 +1,6 @@
 [
   {
-    "name": "Threshold v1",
+    "name": "STRAT_1_MOD_1_TRES_V1",
     "description": "Single model threshold entry/exit",
     "code_entry": "backtest.strategy_rules:entry_signal_threshold",
     "code_exit": "backtest.strategy_rules:exit_signal_threshold",
@@ -12,7 +12,7 @@
     }
   },
   {
-    "name": "Dual Threshold v1",
+    "name": "STRAT_2_MOD_2_TRES_V1",
     "description": "Two-model combined thresholds",
     "code_entry": "backtest.strategy_rules:entry_signal_dual_threshold",
     "code_exit": "backtest.strategy_rules:exit_signal_dual_threshold",

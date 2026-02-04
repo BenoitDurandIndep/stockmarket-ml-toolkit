@@ -1,6 +1,7 @@
 import hashlib
 from typing import List, Dict, Any, Callable, Optional
 import pandas as pd
+from backtest.strategy_registry import resolve_callable
 
 class Model:
     def __init__(self,id:int, name: str,type :str, label:str,label_base:str,predict_col:str, proba_col:str,
@@ -60,19 +61,19 @@ class StrategyType:
         self,
         id: int,
         name: str,
-        model_type: str,
+        # model_type: str,
         description: str,
-        code_entry: Optional[str] = None,
-        code_exit: Optional[str] = None,
-        param_entry: Optional[str] = None,
-        param_exit: Optional[str] = None,
+        code_entry: str = "",
+        code_exit: str = "",
+        param_entry: str = "",
+        param_exit: str = "",
     ):
         """Initialize the StrategyType.
 
         Args:
             id (int): The unique identifier for the strategy type.
             name (str): The name of the strategy type.
-            model_type (str): The type of model used in the strategy.
+            # model_type (str): The type of model used in the strategy.
             description (str): A description of the strategy type.
             code_entry (str, optional): The code for the entry condition. Defaults to None.
             code_exit (str, optional): The code for the exit condition. Defaults to None.
@@ -81,12 +82,12 @@ class StrategyType:
         """
         self.id = id
         self.name = name
-        self.model_type = model_type
+        # self.model_type = model_type
         self.description = description
-        self.code_entry = code_entry
-        self.code_exit = code_exit
-        self.param_entry = param_entry
-        self.param_exit = param_exit
+        self.code_entry = code_entry or ""
+        self.code_exit = code_exit or ""
+        self.param_entry = param_entry or ""
+        self.param_exit = param_exit or ""
 
     def calculate_id(self, models: List[Model], num_strat: int=0, setting_id: int=0) -> int:
         """Calculate a calculated ID for a strategy.
@@ -107,10 +108,31 @@ class StrategyType:
 
         return my_id
 
+    def safe_resolve_callable(self, path: str | None, label: str) -> Callable:
+        if not path:
+            raise ValueError(f"{label} is missing in StrategyType '{self.name}'")
+        return resolve_callable(path)
+    
+    def get_code_entry(self) -> Callable:
+        """Get the entry condition code as a callable function.
 
+        Returns:
+            Callable: The entry condition function.
+        """
+        return self.safe_resolve_callable(self.code_entry, "code_entry")
+    
+    def get_code_exit(self) -> Callable:
+        """Get the exit condition code as a callable function.
+
+        Returns:
+            Callable: The exit condition function.
+        """
+        return self.safe_resolve_callable(self.code_exit, "code_exit")
+
+# class strategy : a set of models with entry and exit conditions
 class Strategy:
     def __init__(self,id:int, name: str, type:StrategyType, models: List[Model],
-                  entry_condition: Callable, exit_condition: Callable, settings: dict,
+                  entry_condition: Callable, exit_condition: Callable, param_entry: dict[str, Any],param_exit: dict[str, Any],
                   suffix:str=""):
         """Initialize the Strategy.
 
@@ -121,7 +143,8 @@ class Strategy:
             models (List[Model]): The list of models used in the strategy.
             entry_condition (Callable): The function defining the entry condition.
             exit_condition (Callable): The function defining the exit condition.
-            settings (dict): The settings to be used in the strategy.
+            param_entry (dict[str, Any]): The parameters for the entry condition.
+            param_exit (dict[str, Any]): The parameters for the exit condition.
             suffix (str, optional): Suffix for entry and exit signals. Defaults to "".
         """
         self.id = id
@@ -130,7 +153,8 @@ class Strategy:
         self.models = models
         self.entry_condition = entry_condition
         self.exit_condition = exit_condition
-        self.settings = settings or {}
+        self.param_entry = param_entry or {}
+        self.param_exit = param_exit or {}
         self.suffix = suffix
 
         if self.suffix == "":
@@ -140,9 +164,10 @@ class Strategy:
         return {
             "name": self.name,
             "strat_type": self.type.name if self.type else None,
-            "model_type": self.type.model_type if self.type else None,
+            # "model_type": self.type.model_type if self.type else None,
             "description": self.type.description if self.type else None,
-            "settings": str(self.settings),  # Convert dict to string for DB storage
+            "param_entry": str(self.param_entry),  # Convert dict to string for DB storage
+            "param_exit": str(self.param_exit),  # Convert dict to string for DB storage
         }
 
         # calculate the id, init the strategy and return it
@@ -153,7 +178,8 @@ class Strategy:
         models: List[Model],
         entry_condition: Callable,
         exit_condition: Callable,
-        settings: Dict[str, Any],
+        param_entry: Dict[str, Any],
+        param_exit: Dict[str, Any],
         num_strat: int = 0,
     ) -> "Strategy":
         """Create a Strategy instance with a calculated ID.
@@ -174,7 +200,8 @@ class Strategy:
             models=models,
             entry_condition=entry_condition,
             exit_condition=exit_condition,
-            settings=settings,
+            param_entry=param_entry,
+            param_exit=param_exit,
         )
 
     def add_signals(self, df: pd.DataFrame, default_value: int=0,
@@ -191,8 +218,8 @@ class Strategy:
             pd.DataFrame: The DataFrame with added entry and exit signals.
         """
 
-        df[f'entry_{self.suffix}'] = self.entry_condition(df,self.models,self.settings).fillna(default_value)
-        df[f'exit_{self.suffix}'] = self.exit_condition(df,self.models,self.settings).fillna(default_value)
+        df[f'entry_{self.suffix}'] = self.entry_condition(df,self.models,self.param_entry).fillna(default_value)
+        df[f'exit_{self.suffix}'] = self.exit_condition(df,self.models,self.param_exit).fillna(default_value)
 
         if sort_column:
             df['tmp_filter'] = df[sort_column].where(df[f'entry_{self.suffix}'] == 1, 0.0)
@@ -280,7 +307,7 @@ class Campaign:
         self.scenarii = scenarii
         self.params = params or {}
         self.filename = f"{self.name.lower().replace(' ', '_')}_campaign.txt"
-        self.id = None
+        self.id: Optional[int] = None
         self.code = self.name.lower().replace(" ", "_")
 
 
@@ -327,7 +354,7 @@ if __name__ == "__main__":
         filename="dummy_model.pkl",
         features=[],
     )
-    strat_type = StrategyType(id=1, name="DummyType", model_type="dummy", description="Dummy strategy type")
+    strat_type = StrategyType(id=1, name="DummyType",  description="Dummy strategy type")
     strat1 = Strategy(
         id=1,
         name="Strat1",
@@ -335,7 +362,8 @@ if __name__ == "__main__":
         models=[model1],
         entry_condition=entry_cond,
         exit_condition=exit_cond,
-        settings={},
+        param_entry={},
+        param_exit={},
     )
     scenario1 = Scenario(id=1, strategy=strat1, stop_loss="fixed", params={})
     campaign = Campaign(name="TestCampaign", description="Test campaign", scenarii=[scenario1])
