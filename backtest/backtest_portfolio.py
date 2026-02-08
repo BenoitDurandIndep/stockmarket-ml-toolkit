@@ -76,7 +76,7 @@ class Portfolio:
         self.value = initial_cash
         self.trade_log = []  # List of dicts or DataFrame for trade details
         self.metrics = {}    # Dict for summary metrics
-        self.file_path=None
+        self.file_path: Optional[str] = None
 
 
         #history

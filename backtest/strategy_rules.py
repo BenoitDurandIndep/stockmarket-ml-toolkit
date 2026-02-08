@@ -1,53 +1,142 @@
 """Strategy entry/exit functions for backtesting."""
 from __future__ import annotations
 
-from typing import Dict, List
+from typing import Dict, List, Optional
 import pandas as pd
 
+def _require_models(models: List, count: int) -> None:
+    """Validate that enough models are provided.
 
-def entry_signal_threshold(df: pd.DataFrame, models, settings: Dict) -> pd.Series:
-    """Entry when model prediction exceeds threshold.
+    Args:
+        models (List): List of model objects (must expose `predict_col`/`proba_col`).
+        count (int): Minimum number of models required.
 
-    Expected in settings:
-        - entry_threshold (int|float)
-
-    Uses first model in `models` list.
+    Raises:
+        ValueError: If the number of models is less than `count`.
     """
-    threshold = settings.get("entry_threshold", 0)
-    return df[models[0].predict_col] >= threshold
+    if len(models) < count:
+        raise ValueError(f"Expected at least {count} models, got {len(models)}")
 
 
-def exit_signal_threshold(df: pd.DataFrame, models, settings: Dict) -> pd.Series:
-    """Exit when model prediction below threshold.
+def _thresholds(settings: Dict, base_key: str, count: int, default: float = 0) -> List[float]:
+    """Build a list of thresholds from settings.
 
-    Expected in settings:
-        - exit_threshold (int|float)
+    Args:
+        settings (Dict): Strategy settings dictionary.
+        base_key (str): Base key name (e.g., "entry_threshold").
+        count (int): Number of thresholds to extract.
+        default (float, optional): Default value if a key is missing. Defaults to 0.
 
-    Uses first model in `models` list.
+    Returns:
+        List[float]: Thresholds in order for each model.
     """
-    threshold = settings.get("exit_threshold", 0)
-    return df[models[0].predict_col] <= threshold
+    values = []
+    for i in range(count):
+        key = base_key if i == 0 else f"{base_key}_{i + 1}"
+        values.append(settings.get(key, default))
+    return values
 
 
-def entry_signal_dual_threshold(df: pd.DataFrame, models, settings: Dict) -> pd.Series:
-    """Entry when model 0 >= entry_threshold and model 1 >= entry_threshold_2.
+def _signal_all(df: pd.DataFrame, cols: List[str], thresholds: List[float]) -> pd.Series:
+    """Return True where all columns meet/exceed their thresholds.
 
-    Expected in settings:
-        - entry_threshold (int|float)
-        - entry_threshold_2 (int|float)
+    Args:
+        df (pd.DataFrame): Data with model columns.
+        cols (List[str]): Column names to evaluate.
+        thresholds (List[float]): Threshold per column.
+
+    Returns:
+        pd.Series: Boolean entry signal.
     """
-    thr_1 = settings.get("entry_threshold", 0)
-    thr_2 = settings.get("entry_threshold_2", 0)
-    return (df[models[0].predict_col] >= thr_1) & (df[models[1].predict_col] >= thr_2)
+    mask = df[cols[0]] >= thresholds[0]
+    for col, thr in zip(cols[1:], thresholds[1:]):
+        mask = mask & (df[col] >= thr)
+    return mask
 
 
-def exit_signal_dual_threshold(df: pd.DataFrame, models, settings: Dict) -> pd.Series:
-    """Exit when model 0 <= exit_threshold or model 1 <= exit_threshold_2.
+def _signal_any_below(df: pd.DataFrame, cols: List[str], thresholds: List[float]) -> pd.Series:
+    """Return True where any column is below/equal to its threshold.
 
-    Expected in settings:
-        - exit_threshold (int|float)
-        - exit_threshold_2 (int|float)
+    Args:
+        df (pd.DataFrame): Data with model columns.
+        cols (List[str]): Column names to evaluate.
+        thresholds (List[float]): Threshold per column.
+
+    Returns:
+        pd.Series: Boolean exit signal.
     """
-    thr_1 = settings.get("exit_threshold", 0)
-    thr_2 = settings.get("exit_threshold_2", 0)
-    return (df[models[0].predict_col] <= thr_1) | (df[models[1].predict_col] <= thr_2)
+    mask = df[cols[0]] <= thresholds[0]
+    for col, thr in zip(cols[1:], thresholds[1:]):
+        mask = mask | (df[col] <= thr)
+    return mask
+
+
+def entry_signal_generic(
+    df: pd.DataFrame,
+    models: List,
+    settings: Dict,
+    count: int = 1,
+    use_proba: bool = False,
+) -> pd.Series:
+    """Generic entry signal for 1..4 models with optional proba check.
+
+    Args:
+        df (pd.DataFrame): DataFrame containing model score/proba columns.
+        models (List): List of model objects (uses models[0..count-1]).
+        settings (Dict): Thresholds. For score: `entry_threshold`, `entry_threshold_2`, ...
+                 For proba: `entry_proba_threshold`, `entry_proba_threshold_2`, ...
+        count (int, optional): Number of models to use (1..4). Defaults to 1.
+        use_proba (bool, optional): If True, require both score AND proba to meet thresholds.
+                                    Defaults to False.
+
+    Returns:
+        pd.Series: Boolean entry signal.
+    """
+    _require_models(models, count)
+    score_thresholds = _thresholds(settings, "entry_threshold", count)
+    score_cols = [m.predict_col for m in models[:count]]
+    score_mask = _signal_all(df, score_cols, score_thresholds)
+
+    if not use_proba:
+        return score_mask
+
+    proba_thresholds = _thresholds(settings, "entry_proba_threshold", count)
+    proba_cols = [m.proba_col for m in models[:count]]
+    proba_mask = _signal_all(df, proba_cols, proba_thresholds)
+    return score_mask & proba_mask
+
+
+def exit_signal_generic(
+    df: pd.DataFrame,
+    models: List,
+    settings: Dict,
+    count: int = 1,
+    use_proba: bool = False,
+) -> pd.Series:
+    """Generic exit signal for 1..4 models with optional proba check.
+
+    Args:
+        df (pd.DataFrame): DataFrame containing model score/proba columns.
+        models (List): List of model objects (uses models[0..count-1]).
+        settings (Dict): Thresholds. For score: `exit_threshold`, `exit_threshold_2`, ...
+                         For proba: `exit_proba_threshold`, `exit_proba_threshold_2`, ...
+        count (int, optional): Number of models to use (1..4). Defaults to 1.
+        use_proba (bool, optional): If True, trigger exit on score OR proba threshold breach.
+                                    Defaults to False.
+
+    Returns:
+        pd.Series: Boolean exit signal.
+    """
+    _require_models(models, count)
+    score_thresholds = _thresholds(settings, "exit_threshold", count)
+    score_cols = [m.predict_col for m in models[:count]]
+    score_mask = _signal_any_below(df, score_cols, score_thresholds)
+
+    if not use_proba:
+        return score_mask
+
+    proba_thresholds = _thresholds(settings, "exit_proba_threshold", count)
+    proba_cols = [m.proba_col for m in models[:count]]
+    proba_mask = _signal_any_below(df, proba_cols, proba_thresholds)
+    return score_mask | proba_mask
+

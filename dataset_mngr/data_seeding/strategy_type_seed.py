@@ -2,6 +2,7 @@
 from __future__ import annotations
 import sys
 from pathlib import Path
+import json
 
 from sqlalchemy.orm import sessionmaker
 
@@ -27,33 +28,40 @@ def upsert_strategy_type(session, payload: dict):
         setattr(existing, key, value)
     session.commit()
 
-# Predefined strategy types to insert for testing
-STRATEGY_TYPES = [
-    StrategyTypeSpec(
-        name="Threshold v1",
-        description="Single model threshold entry/exit",
-        code_entry="backtest.strategy_rules:entry_signal_threshold",
-        code_exit="backtest.strategy_rules:exit_signal_threshold",
-        param_entry={"entry_threshold": 4},
-        param_exit={"exit_threshold": 0},
-    ),
-    StrategyTypeSpec(
-        name="Dual Threshold v1",
-        description="Two-model combined thresholds",
-        code_entry="backtest.strategy_rules:entry_signal_dual_threshold",
-        code_exit="backtest.strategy_rules:exit_signal_dual_threshold",
-        param_entry={"entry_threshold": 4, "entry_threshold_2": 4},
-        param_exit={"exit_threshold": 0, "exit_threshold_2": 0},
-    ),
-]
+def load_strategy_types(spec_path: Path) -> list[StrategyTypeSpec]:
+    if not spec_path.exists():
+        raise FileNotFoundError(f"strategy types file not found: {spec_path}")
+
+    with spec_path.open("r", encoding="utf-8") as handle:
+        payload = json.load(handle)
+
+    if not isinstance(payload, list):
+        raise ValueError("strategy types payload must be a list of objects")
+
+    specs: list[StrategyTypeSpec] = []
+    for item in payload:
+        specs.append(
+            StrategyTypeSpec(
+                name=item["name"],
+                description=item.get("description", ""),
+                code_entry=item["code_entry"],
+                code_exit=item["code_exit"],
+                param_entry=item.get("param_entry", {}),
+                param_exit=item.get("param_exit", {}),
+            )
+        )
+    return specs
 
 
 def main():
+    spec_path = Path(__file__).resolve().parent / "strategy_types.json"
+    specs = load_strategy_types(spec_path)
+
     con = get_connection()
     if con is None:
         raise RuntimeError("Database connection failed")
     session = sessionmaker(bind=con)()
-    for spec in STRATEGY_TYPES:
+    for spec in specs:
         upsert_strategy_type(session, spec.to_db_payload())
     session.close()
     con.close()

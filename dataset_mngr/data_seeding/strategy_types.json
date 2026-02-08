@@ -1,0 +1,174 @@
+[
+  {
+    "name": "STRAT_1_MOD_1_TRES_V1",
+    "description": "Single model score threshold entry/exit",
+    "code_entry": "backtest.strategy_rules:entry_signal_generic",
+    "code_exit": "backtest.strategy_rules:exit_signal_generic",
+    "param_entry": {
+      "count": 1,
+      "use_proba": false,
+      "entry_threshold": 4
+    },
+    "param_exit": {
+      "count": 1,
+      "use_proba": false,
+      "exit_threshold": 0
+    }
+  },
+  {
+    "name": "STRAT_2_MOD_2_TRES_V1",
+    "description": "Two-model score thresholds",
+    "code_entry": "backtest.strategy_rules:entry_signal_generic",
+    "code_exit": "backtest.strategy_rules:exit_signal_generic",
+    "param_entry": {
+      "count": 2,
+      "use_proba": false,
+      "entry_threshold": 4,
+      "entry_threshold_2": 4
+    },
+    "param_exit": {
+      "count": 2,
+      "use_proba": false,
+      "exit_threshold": 0,
+      "exit_threshold_2": 0
+    }
+  },
+  {
+    "name": "STRAT_3_MOD_3_TRES_V1",
+    "description": "Three-model score thresholds",
+    "code_entry": "backtest.strategy_rules:entry_signal_generic",
+    "code_exit": "backtest.strategy_rules:exit_signal_generic",
+    "param_entry": {
+      "count": 3,
+      "use_proba": false,
+      "entry_threshold": 4,
+      "entry_threshold_2": 4,
+      "entry_threshold_3": 4
+    },
+    "param_exit": {
+      "count": 3,
+      "use_proba": false,
+      "exit_threshold": 0,
+      "exit_threshold_2": 0,
+      "exit_threshold_3": 0
+    }
+  },
+  {
+    "name": "STRAT_4_MOD_4_TRES_V1",
+    "description": "Four-model score thresholds",
+    "code_entry": "backtest.strategy_rules:entry_signal_generic",
+    "code_exit": "backtest.strategy_rules:exit_signal_generic",
+    "param_entry": {
+      "count": 4,
+      "use_proba": false,
+      "entry_threshold": 4,
+      "entry_threshold_2": 4,
+      "entry_threshold_3": 4,
+      "entry_threshold_4": 4
+    },
+    "param_exit": {
+      "count": 4,
+      "use_proba": false,
+      "exit_threshold": 0,
+      "exit_threshold_2": 0,
+      "exit_threshold_3": 0,
+      "exit_threshold_4": 0
+    }
+  },
+  {
+    "name": "STRAT_1_MOD_1_TRES_PROBA_V1",
+    "description": "Single model score + proba thresholds",
+    "code_entry": "backtest.strategy_rules:entry_signal_generic",
+    "code_exit": "backtest.strategy_rules:exit_signal_generic",
+    "param_entry": {
+      "count": 1,
+      "use_proba": true,
+      "entry_threshold": 4,
+      "entry_proba_threshold": 0.6
+    },
+    "param_exit": {
+      "count": 1,
+      "use_proba": true,
+      "exit_threshold": 0,
+      "exit_proba_threshold": 0.6
+    }
+  },
+  {
+    "name": "STRAT_2_MOD_2_TRES_PROBA_V1",
+    "description": "Two-model score + proba thresholds",
+    "code_entry": "backtest.strategy_rules:entry_signal_generic",
+    "code_exit": "backtest.strategy_rules:exit_signal_generic",
+    "param_entry": {
+      "count": 2,
+      "use_proba": true,
+      "entry_threshold": 4,
+      "entry_threshold_2": 4,
+      "entry_proba_threshold": 0.6,
+      "entry_proba_threshold_2": 0.6
+    },
+    "param_exit": {
+      "count": 2,
+      "use_proba": true,
+      "exit_threshold": 0,
+      "exit_threshold_2": 0,
+      "exit_proba_threshold": 0.6,
+      "exit_proba_threshold_2": 0.6
+    }
+  },
+  {
+    "name": "STRAT_3_MOD_3_TRES_PROBA_V1",
+    "description": "Three-model score + proba thresholds",
+    "code_entry": "backtest.strategy_rules:entry_signal_generic",
+    "code_exit": "backtest.strategy_rules:exit_signal_generic",
+    "param_entry": {
+      "count": 3,
+      "use_proba": true,
+      "entry_threshold": 4,
+      "entry_threshold_2": 4,
+      "entry_threshold_3": 4,
+      "entry_proba_threshold": 0.6,
+      "entry_proba_threshold_2": 0.6,
+      "entry_proba_threshold_3": 0.6
+    },
+    "param_exit": {
+      "count": 3,
+      "use_proba": true,
+      "exit_threshold": 0,
+      "exit_threshold_2": 0,
+      "exit_threshold_3": 0,
+      "exit_proba_threshold": 0.6,
+      "exit_proba_threshold_2": 0.6,
+      "exit_proba_threshold_3": 0.6
+    }
+  },
+  {
+    "name": "STRAT_4_MOD_4_TRES_PROBA_V1",
+    "description": "Four-model score + proba thresholds",
+    "code_entry": "backtest.strategy_rules:entry_signal_generic",
+    "code_exit": "backtest.strategy_rules:exit_signal_generic",
+    "param_entry": {
+      "count": 4,
+      "use_proba": true,
+      "entry_threshold": 4,
+      "entry_threshold_2": 4,
+      "entry_threshold_3": 4,
+      "entry_threshold_4": 4,
+      "entry_proba_threshold": 0.6,
+      "entry_proba_threshold_2": 0.6,
+      "entry_proba_threshold_3": 0.6,
+      "entry_proba_threshold_4": 0.6
+    },
+    "param_exit": {
+      "count": 4,
+      "use_proba": true,
+      "exit_threshold": 0,
+      "exit_threshold_2": 0,
+      "exit_threshold_3": 0,
+      "exit_threshold_4": 0,
+      "exit_proba_threshold": 0.6,
+      "exit_proba_threshold_2": 0.6,
+      "exit_proba_threshold_3": 0.6,
+      "exit_proba_threshold_4": 0.6
+    }
+  }
+]
